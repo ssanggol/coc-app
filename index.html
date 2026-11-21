@@ -120,6 +120,15 @@ td.mono{font-size:12px}
 .kv{display:grid;grid-template-columns:96px 1fr;gap:6px 10px;font-size:14px}
 .kv dt{color:var(--muted)}
 .kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.pv{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.pv img{max-width:100%;max-height:70vh;border-radius:8px;object-fit:contain}
+.pv .cap{color:#FFFFFF;font-size:14px;text-align:center;max-width:440px}
+.pv .cap b{display:block;font-size:16px;margin-bottom:4px}
+.pv button{min-height:48px;padding:0 24px;border-radius:12px;border:0;background:#FFFFFF;color:#111827;font-weight:700;font-size:16px}
+.gal{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.gal button{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:4px;display:flex;flex-direction:column;gap:2px;align-items:stretch;text-align:left;color:var(--ink)}
+.gal img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px}
+.gal span{font-size:11.5px;color:var(--muted);line-height:1.3}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:12px 16px;border-radius:12px;font-size:14px;max-width:min(440px,calc(100% - 32px));z-index:20;box-shadow:0 4px 16px rgba(0,0,0,.2)}
 .list-h{display:flex;justify-content:space-between;align-items:baseline}
 .empty{color:var(--muted);font-size:14px;padding:14px 0}
@@ -150,6 +159,7 @@ td.mono{font-size:12px}
 <input type="file" id="barcodeFile" accept="image/*" capture="environment" class="vh" aria-label="바코드 촬영">
 <input type="file" id="photoFile" accept="image/*" capture="environment" class="vh" aria-label="사진 촬영">
 <div class="toast" id="toast" role="status" hidden></div>
+<div class="pv" id="pv" hidden role="dialog" aria-label="사진 원본 보기"><img id="pvImg" alt=""><div class="cap" id="pvCap"></div><button type="button" id="pvClose">닫기</button></div>
 <div class="cam" id="cam" hidden><video id="camVideo" playsinline muted></video><div class="frame" aria-hidden="true"></div><div class="msg" id="camMsg">QR을 네모 안에 맞추세요</div><div class="bar"><button type="button" id="camClose">닫기</button><label for="scanFile">사진으로 찍기</label></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
@@ -357,6 +367,27 @@ async function decodeBarcode(file){
     return null;
   }finally{URL.revokeObjectURL(o.url)}
 }
+/* 사진 원본: 폰 저장소(IndexedDB)에 해시를 열쇠로 보관 */
+function idb(){return new Promise(function(res,rej){try{var r=indexedDB.open('coc-photos',1);r.onupgradeneeded=function(){r.result.createObjectStore('p')};r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)}}catch(e){rej(e)}})}
+async function idbPut(k,blob){var d=await idb();return new Promise(function(res,rej){var t=d.transaction('p','readwrite');t.objectStore('p').put(blob,k);t.oncomplete=function(){res()};t.onerror=function(){rej(t.error)}})}
+async function idbGet(k){var d=await idb();return new Promise(function(res,rej){var t=d.transaction('p','readonly');var q=t.objectStore('p').get(k);q.onsuccess=function(){res(q.result||null)};q.onerror=function(){rej(q.error)}})}
+function addPhoto(it,label,ph){if(!ph)return;it.photos=it.photos||[];it.photos.push({hash:ph.hash,thumb:ph.thumb,label:label,at:new Date().toISOString(),by:role().label+' · '+myName()})}
+function lastPhoto(it){var a=it.photos||[];if(a.length)return a[a.length-1];return it.sealThumb?{thumb:it.sealThumb,label:'봉인 전'}:null}
+function photoBlock(v,label,required){
+  return '<label class="photo" for="photoFile">'+(v.photo?'<img class="thumb" alt="'+esc(label)+'" src="'+v.photo.thumb+'">':'<span class="thumb">사진</span>')+
+  '<span style="display:flex;flex-direction:column;gap:2px"><b>'+esc(label)+'</b><span class="small" style="color:'+(v.photo?'var(--good)':(required?'var(--warn)':'var(--muted)'))+'">'+(v.photo?'촬영됨 · 원본 보관 · 해시 '+v.photo.hash.slice(0,12):(required?'필수 · 눌러서 촬영':'선택 · 문제가 있을 때 촬영'))+'</span></span></label>';
+}
+async function showPhoto(it,idx){
+  var ph=(it.photos||[])[idx];if(!ph)return;
+  var img=$('#pvImg'),cap=$('#pvCap'),url=null,blob=null;
+  try{blob=await idbGet(ph.hash)}catch(e){}
+  var status;
+  if(blob){var h=await sha256Bytes(await blob.arrayBuffer());url=URL.createObjectURL(blob);status=h===ph.hash?'원본 해시 일치 ✓':'원본 해시 불일치 ✕';}
+  else status='이 폰에 원본이 없습니다 (미리보기만 표시)';
+  img.src=url||ph.thumb;img.alt=ph.label;
+  cap.innerHTML='<b>'+esc(ph.label)+'</b>'+esc(fmtTime(ph.at)+' · '+(ph.by||''))+'<br>'+esc(status)+'<br><span style="font-family:var(--mono);font-size:11px;opacity:.8;word-break:break-all">'+esc(ph.hash)+'</span>';
+  $('#pv').hidden=false;$('#pv').dataset.url=url||'';
+}
 async function photoInfo(file){
   var buf=await file.arrayBuffer();
   var h=await sha256Bytes(buf);
@@ -551,7 +582,8 @@ VIEWS.detail=async function(v){
   (it.access?'<div class="card"><div class="list-h"><h2>열람 가능한 담당자</h2><span class="small">'+it.access.length+'명</span></div><div class="chips">'+it.access.map(function(k){return '<span class="pill">'+esc(keyLabel(k))+'</span>'}).join('')+'</div>'+
     (isHolder?'<form id="accessForm" style="display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:center"><label for="accRole" class="vh">기능</label><select id="accRole" class="input" style="height:44px;font-size:14px;padding:0 8px">'+Object.keys(ROLES).map(function(k){return '<option value="'+k+'">'+esc(ROLES[k].label)+'</option>'}).join('')+'</select><label for="accName" class="vh">이름</label><input id="accName" class="input" style="height:44px;font-size:15px" placeholder="담당자 이름 추가"><button class="btn outline" type="submit" style="min-height:44px">추가</button></form>':'')+
     '<span class="small">이 사람들 외에는 QR을 찍어도 내용이 보이지 않습니다.</span></div>':'')+
-  '<div class="card" style="flex-direction:row;align-items:center;gap:12px">'+(it.sealThumb?'<img class="thumb" alt="봉인 전 사진" src="'+it.sealThumb+'">':'<span class="thumb">사진 없음</span>')+
+  ((it.photos||[]).length?'<div class="card"><div class="list-h"><h2>사진 기록</h2><span class="small">'+it.photos.length+'장 · 눌러서 원본 확인</span></div><div class="gal">'+it.photos.map(function(ph,i){return '<button type="button" data-pview="'+i+'"><img alt="'+esc(ph.label)+'" src="'+ph.thumb+'"><span>'+esc(ph.label)+'<br>'+esc(fmtTime(ph.at))+'</span></button>'}).join('')+'</div></div>':'')+
+  '<div class="card" style="flex-direction:row;align-items:center;gap:12px">'+(lastPhoto(it)?'<img class="thumb" alt="최근 사진" src="'+lastPhoto(it).thumb+'">':'<span class="thumb">사진 없음</span>')+
   '<span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b>내용물 '+totalQty(it.contents)+'점</b><span class="small" style="overflow-wrap:anywhere">'+esc(contentsLine(it.contents))+'</span></span></div>'+
   (ver.ok?'<div class="banner good">무결성 확인 · 기록 '+ver.count+'건 모두 일치</div>':'<div class="banner bad">무결성 불일치 · '+ver.at+'번째 기록부터 맞지 않습니다</div>')+
   actions+
@@ -590,7 +622,8 @@ VIEWS.receive=async function(v){
   '<div class="row"><span>봉인 상태</span><b style="color:'+(damaged?'var(--bad)':'var(--good)')+'">'+(damaged?'봉인 이상':'이상 없음')+'</b></div>'+
   '<div class="row"><span>무결성</span><b style="color:'+(ver.ok?'var(--good)':'var(--bad)')+'">'+(ver.ok?'확인됨 · '+ver.count+'건':'불일치')+'</b></div></div>'+
   '<div class="card"><span class="small">확인 수준</span><b>'+esc(lv.name)+'</b><span class="small">'+esc(lv.why)+'</span></div>'+
-  '<div class="card" style="flex-direction:row;align-items:center;gap:12px">'+(it.sealThumb?'<img class="thumb" style="width:88px;height:88px" alt="봉인 전 사진" src="'+it.sealThumb+'">':'<span class="thumb">사진 없음</span>')+'<span class="small">봉인 전 사진과 실물을 대조한 뒤 인수를 확인하세요. 내용물: '+esc(contentsLine(it.contents))+'</span></div>'+
+  (function(){var lp=lastPhoto(it),li=(it.photos||[]).length-1;return '<div class="card"><span class="small">직전 사진과 실물을 대조하세요'+(lp?' · '+esc(lp.label):'')+'</span>'+(lp?(li>=0?'<button type="button" data-pview="'+li+'" style="border:0;padding:0;background:none"><img alt="직전 사진" src="'+lp.thumb+'" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px;background:var(--bg)"></button><span class="small">눌러서 원본 크게 보기</span>':'<img alt="직전 사진" src="'+lp.thumb+'" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px">'):'<span class="thumb">사진 없음</span>')+'<span class="small">내용물: '+esc(contentsLine(it.contents))+'</span></div>'})()+
+  photoBlock(v,'받은 상태 사진',false)+
   (damaged?'<label class="banner bad" style="cursor:pointer"><input type="checkbox" id="ackDamage"'+(v.ack?' checked':'')+' style="width:22px;height:22px;margin:0;flex-shrink:0"><span>'+(it.opened?'개봉된 상태('+esc(it.opened?it.opened.reason:'')+')임':'봉인 이상('+esc(it.damage?it.damage.type:'')+')')+'을 확인했습니다</span></label>':'')+
   '<button class="btn primary" type="button" data-act="doReceive"'+(canGo?'':' disabled')+'>인수 확인</button>'+
   (it.opened||it.damage?'<button class="btn outline" type="button" data-act="doReceiveRepack"'+(canGo?'':' disabled')+'>인수하고 바로 재포장'+(me==='storage'?' (새 바코드)':' (새 QR)')+'</button>':'')+
@@ -608,7 +641,8 @@ VIEWS.intake=async function(v){
   '<label class="btn outline" for="barcodeFile">바코드 사진으로 찍기</label>'+
   '<div class="field"><label for="intakeCode">바코드 번호</label><input class="input mono" id="intakeCode" maxlength="30" autocapitalize="characters" placeholder="사진 판독 또는 직접 입력" value="'+esc(v.intakeCode||'')+'">'+
   (v.byPhoto?'<span class="small" style="color:var(--good)">사진에서 읽은 번호입니다. 실물 바코드 아래 숫자와 같은지 확인하세요.</span>':'')+'</div>'+
-  '<button class="btn primary" type="button" data-act="doIntake">QR ↔ 바코드 일치 등록</button>'+
+  photoBlock(v,'바코드를 붙인 상태 사진',true)+
+  '<button class="btn primary" type="button" data-act="doIntake"'+(v.photo?'':' disabled')+'>QR ↔ 바코드 일치 등록</button>'+
   '<button class="btn ghost" type="button" data-act="back">취소</button>';
 };
 VIEWS.openpkg=async function(v){
@@ -617,7 +651,8 @@ VIEWS.openpkg=async function(v){
   return '<p class="eyebrow">'+esc(kindLabel(it))+' <span class="mono">'+esc(it.code)+'</span></p><h1>개봉 기록</h1>'+
   '<div class="chips">'+['감식','내용 확인','기타'].map(function(r){return '<button type="button" class="chip" data-reason="'+r+'" aria-pressed="'+(v.reason===r)+'">'+r+'</button>'}).join('')+'</div>'+
   '<p class="small" style="margin:0">개봉하면 봉투는 \'개봉됨\'으로 표시되고, 압수물 관리자가 새 포장·바코드로 재포장해야 다시 봉인됩니다. 개봉자와 시각은 자동 기록됩니다.</p>'+
-  '<button class="btn warn" type="button" data-act="doOpen">개봉 기록하기</button><button class="btn ghost" type="button" data-act="back">취소</button>';
+  photoBlock(v,'개봉 전 봉인 상태 사진',true)+
+  '<button class="btn warn" type="button" data-act="doOpen"'+(v.photo?'':' disabled')+'>개봉 기록하기</button><button class="btn ghost" type="button" data-act="back">취소</button>';
 };
 
 /* ---------- 재봉인용 QR 발급 (압수물 관리자) ---------- */
@@ -653,7 +688,7 @@ VIEWS.repack=async function(v){
     return '<div class="row" style="flex-wrap:wrap"><span class="l"><b>'+esc(r.name)+' '+r.qty+'점</b><span class="small">'+esc(it.code)+'-'+(i+1)+'</span></span>'+
     '<div class="chips">'+v.packs.map(function(p,pi){return '<button type="button" class="chip sm" data-assign="'+i+'|'+pi+'" aria-pressed="'+(v.assign[i]===pi)+'">포장 '+(pi+1)+'</button>'}).join('')+'</div></div>';
   }).join('');
-  var ok=v.packs.length&&left===0;
+  var ok=v.packs.length&&left===0&&v.photo;
   return '<p class="eyebrow">'+esc(kindLabel(it))+' <span class="mono">'+esc(it.code)+'</span> · '+totalQty(rows)+'점 → 새 포장</p><h1>재포장</h1>'+
   (byQR?'<p class="small" style="margin:0">압수물 관리자가 발급한 <b>재봉인용 QR</b>을 새 포장에 붙이고 찍거나 아래에서 고르세요. 바코드는 재입고 때 이 QR에 일치 등록됩니다.</p>'+(avail.length?'<div class="chips">'+avail.map(function(c){return '<button type="button" class="chip mono" data-useqr="'+c+'">'+esc(c)+' 사용</button>'}).join('')+'</div>':'')
         :'<p class="small" style="margin:0">새 포장에 출력한 압수물 바코드를 붙이고 찍거나 번호를 넣으세요.</p>')+
@@ -662,6 +697,7 @@ VIEWS.repack=async function(v){
   packCards+
   (v.packs.length?'<div class="rows"><div class="row"><b>어느 포장에 담았나요?</b></div>'+assignRows+'</div>':'<p class="empty">바코드 번호를 추가하면 증거물을 포장별로 배정할 수 있습니다.</p>')+
   (v.packs.length?(left===0?'<div class="banner good">'+totalQty(rows)+'점 모두 새 포장에 배정됨 · 남은 증거물 0점</div>':'<div class="banner warn">아직 배정하지 않은 증거물 '+left+'점</div>'):'')+
+  photoBlock(v,'새 포장 봉인 사진 (바코드·QR이 보이게)',true)+
   '<button class="btn primary" type="button" data-act="doRepack"'+(ok?'':' disabled')+'>재포장 완료 · 새 포장 '+v.packs.length+'개</button>'+
   '<button class="btn ghost" type="button" data-act="back">취소</button>';
 };
@@ -766,6 +802,7 @@ document.addEventListener('click',function(e){
   if(d.dtype){view.dtype=d.dtype;render();return}
   if(d.ok!==undefined){view.ok=d.ok==='1';render();return}
   if(d.reason){view.reason=d.reason;render();return}
+  if(d.pview!==undefined){store.getItem(view.code).then(function(it){showPhoto(it,+d.pview)});return}
   if(d.rmissue!==undefined){view.issue.splice(+d.rmissue,1);render();return}
   if(d.useqr){var ex=view.packs.length;view.packs.push({code:d.useqr,attach:'pack'});
     store.getItem(view.code).then(function(it){if(ex===0)(it.contents||[]).forEach(function(r,i){if(view.assign[i]===undefined)view.assign[i]=0});render()});return}
@@ -801,13 +838,14 @@ document.addEventListener('click',function(e){
     })},
     doOpen:function(){guard(async function(){
       var v=view,it=await store.getItem(v.code);
-      await appendEvent(v.code,'open',{reason:v.reason});
-      it.status='opened';it.opened={reason:v.reason};await store.putItem(it);
+      await appendEvent(v.code,'open',{reason:v.reason,photoHash:v.photo.hash});
+      it.status='opened';it.opened={reason:v.reason};addPhoto(it,'개봉 전',v.photo);await store.putItem(it);
       toast('개봉을 기록했습니다');go({name:'detail',code:v.code});
     })},
     doReceiveIntake:function(){guard(async function(){
       var v=view,it=await store.getItem(v.code),lv=levelFor(it.contents);
-      await appendEvent(v.code,'receive',{level:lv.name,damageAck:!!it.damage});
+      await appendEvent(v.code,'receive',{level:lv.name,damageAck:!!it.damage,photoHash:v.photo?v.photo.hash:''});
+      if(v.photo)addPhoto(it,'인수 시 상태',v.photo);
       it.holder=me;it.to=null;it.toName=null;addAccess(it,myKey());it.status=it.opened?'opened':(it.damage?'damaged':'sealed');await store.putItem(it);
       toast('인수했습니다. 바코드를 붙이고 등록하세요.');
       go({name:'intake',code:v.code,from:{name:'detail',code:v.code}});
@@ -817,13 +855,14 @@ document.addEventListener('click',function(e){
       if(!bc){toast('바코드 번호를 4자리 이상 넣으세요');return}
       if(bc===v.code||await store.getItem(bc)||await store.getAlias(bc)){toast('이미 쓰인 번호입니다: '+bc);return}
       var it=await store.getItem(v.code);
-      await appendEvent(v.code,'intake',{barcode:bc,byPhoto:!!v.byPhoto&&v.intakeCode===bc});
-      it.barcode=bc;await store.putItem(it);await store.setAlias(bc,it.code);
+      await appendEvent(v.code,'intake',{barcode:bc,byPhoto:!!v.byPhoto&&v.intakeCode===bc,photoHash:v.photo.hash});
+      it.barcode=bc;addPhoto(it,'입고 · 바코드 부착',v.photo);await store.putItem(it);await store.setAlias(bc,it.code);
       toast('입고했습니다 · QR '+it.code+' ↔ 바코드 '+bc);go({name:'detail',code:v.code});
     })},
     doReceiveRepack:function(){guard(async function(){
       var v=view,it=await store.getItem(v.code),lv=levelFor(it.contents);
-      await appendEvent(v.code,'receive',{level:lv.name,damageAck:!!it.damage});
+      await appendEvent(v.code,'receive',{level:lv.name,damageAck:!!it.damage,photoHash:v.photo?v.photo.hash:''});
+      if(v.photo)addPhoto(it,'인수 시 상태',v.photo);
       it.holder=me;it.to=null;it.toName=null;addAccess(it,myKey());it.status=it.opened?'opened':(it.damage?'damaged':'sealed');await store.putItem(it);
       toast('인수했습니다. 새 포장 바코드를 넣으세요.');
       go({name:'repack',code:v.code,from:{name:'detail',code:v.code}});
@@ -838,10 +877,10 @@ document.addEventListener('click',function(e){
       for(var pi=0;pi<v.packs.length;pi++){
         var p=v.packs[pi];
         var contents=rows.filter(function(r,ri){return v.assign[ri]===pi}).map(function(r){return {name:r.name,qty:r.qty,nature:(r.nature||[]).slice()}});
-        var nit={code:p.code,kind:'bag',site:old.site,crime:old.crime,report112:old.report112||'',holder:me,status:'sealed',to:null,contents:contents,kics:old.kics||'',scas:old.scas||'',parent:old.code,attach:p.attach,idType:(me==='storage'?'barcode':'qr'),access:(old.access||[myKey()]).slice(),createdAt:new Date().toISOString()};
+        var nit={photos:[{hash:v.photo.hash,thumb:v.photo.thumb,label:'재포장 봉인',at:new Date().toISOString(),by:role().label+' · '+myName()}],sealThumb:v.photo.thumb,code:p.code,kind:'bag',site:old.site,crime:old.crime,report112:old.report112||'',holder:me,status:'sealed',to:null,contents:contents,kics:old.kics||'',scas:old.scas||'',parent:old.code,attach:p.attach,idType:(me==='storage'?'barcode':'qr'),access:(old.access||[myKey()]).slice(),createdAt:new Date().toISOString()};
         await store.putItem(nit);
         await appendEvent(p.code,'from',{from:old.code,parentHash:parentHash,attach:p.attach});
-        await appendEvent(p.code,'seal',{contents:contents,contentsHash:await sha256Text(JSON.stringify(contents)),photoHash:''});
+        await appendEvent(p.code,'seal',{contents:contents,contentsHash:await sha256Text(JSON.stringify(contents)),photoHash:v.photo.hash});
       }
       old.status='repacked';old.children=codes;old.to=null;codes.forEach(function(c){delete mem.issued[c]});old.reseal=(old.reseal||[]).filter(function(c){return codes.indexOf(c)<0});persist();await store.putItem(old);
       toast('재포장했습니다 · 새 포장 '+codes.length+'개');
@@ -869,7 +908,7 @@ document.addEventListener('click',function(e){
       var contents=v.rows.map(function(r){return {name:r.name,qty:r.qty,nature:(r.nature||[]).slice()}});
       var ch=await sha256Text(JSON.stringify(contents));
       await appendEvent(v.code,'seal',{contents:contents,contentsHash:ch,photoHash:v.photo.hash});
-      it.contents=contents;it.status='sealed';it.sealThumb=v.photo.thumb;
+      it.contents=contents;it.status='sealed';it.sealThumb=v.photo.thumb;addPhoto(it,'봉인 전',v.photo);
       await store.putItem(it);
       toast('봉인했습니다 · '+totalQty(contents)+'점');
       go({name:'detail',code:v.code});
@@ -884,7 +923,8 @@ document.addEventListener('click',function(e){
     })},
     doReceive:function(){guard(async function(){
       var v=view,it=await store.getItem(v.code),lv=levelFor(it.contents);
-      await appendEvent(v.code,'receive',{level:lv.name,damageAck:!!it.damage});
+      await appendEvent(v.code,'receive',{level:lv.name,damageAck:!!it.damage,photoHash:v.photo?v.photo.hash:''});
+      if(v.photo)addPhoto(it,'인수 시 상태',v.photo);
       it.holder=me;it.to=null;it.toName=null;addAccess(it,myKey());it.status=it.opened?'opened':(it.damage?'damaged':'sealed');await store.putItem(it);
       toast('인수했습니다');
       go({name:'detail',code:v.code});
@@ -892,7 +932,7 @@ document.addEventListener('click',function(e){
     doDamage:function(){guard(async function(){
       var v=view,it=await store.getItem(v.code);
       await appendEvent(v.code,'damage',{type:v.dtype,contentsOk:v.ok,photoHash:v.photo.hash});
-      it.damage={type:v.dtype,contentsOk:v.ok};
+      it.damage={type:v.dtype,contentsOk:v.ok};addPhoto(it,'손상 · '+v.dtype,v.photo);
       if(it.status!=='transit')it.status='damaged';
       await store.putItem(it);
       toast('손상을 보고했습니다');
@@ -919,7 +959,7 @@ document.addEventListener('click',function(e){
     liveScan:function(){startScan()},
     backup:function(){guard(async function(){await shareFile('증거물연계_백업_'+yymmdd()+'.json',JSON.stringify(mem,null,1),'application/json')})},
     resetAsk:function(){view.resetAsk=true;render()},
-    reset:function(){mem={items:{},events:{},sites:[],alias:{},issued:{}};persist();Object.keys(ROLES).forEach(function(k){try{localStorage.removeItem('coc.site.'+k)}catch(e){}});toast('기록을 지웠습니다');go({name:'home'})}
+    reset:function(){try{indexedDB.deleteDatabase('coc-photos')}catch(e){}mem={items:{},events:{},sites:[],alias:{},issued:{}};persist();Object.keys(ROLES).forEach(function(k){try{localStorage.removeItem('coc.site.'+k)}catch(e){}});toast('기록을 지웠습니다');go({name:'home'})}
   };
   if(A[act])A[act]();
 });
@@ -986,9 +1026,11 @@ $('#packQrFile').addEventListener('change',async function(){
     view.packInput=c;toast('QR '+c+' · [추가]를 누르세요');render();
   }catch(e){toast('사진을 읽지 못했습니다.')}
 });
+$('#pvClose').addEventListener('click',function(){var pv=$('#pv');pv.hidden=true;if(pv.dataset.url)URL.revokeObjectURL(pv.dataset.url);$('#pvImg').src=''});
 $('#photoFile').addEventListener('change',async function(){
   var f=this.files&&this.files[0];this.value='';if(!f)return;
-  try{view.photo=await photoInfo(f);render()}catch(e){toast('사진을 읽지 못했습니다.')}
+  var ic=$('#intakeCode'),pc=$('#packCode');if(ic)view.intakeCode=ic.value;if(pc)view.packInput=pc.value;
+  try{var ph=await photoInfo(f);try{await idbPut(ph.hash,f)}catch(e){toast('원본을 폰에 저장하지 못했습니다 (저장 공간 확인)')}view.photo=ph;render()}catch(e){toast('사진을 읽지 못했습니다.')}
 });
 
 /* ---------- boot ---------- */
