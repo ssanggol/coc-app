@@ -164,7 +164,7 @@ var ROLES = {
 };
 var CRIMES = ['절도','강도','살인','방화','사기','폭행','상해','성폭력','강추','주침','무취','교통','화재','변사','미상'];
 var PRESETS = ['담배꽁초','휴대폰','면봉','흉기','의류','현금','지갑','신발'];
-var EVLABEL = {register:'등록', seal:'봉인', handover:'인계', receive:'인수', damage:'손상 보고', link:'사건번호 연결', repack:'재포장', from:'재포장으로 생성'};
+var EVLABEL = {register:'등록', seal:'봉인', handover:'인계', receive:'인수', damage:'손상 보고', link:'사건번호 연결', repack:'재포장', from:'재포장으로 생성', access:'담당자 추가'};
 var STATUS = {open:['봉인 전','warn'], sealed:['봉인됨',''], transit:['인계 중',''], damaged:['봉인 이상','bad'], repacked:['재포장됨','good']};
 
 /* ---------- small helpers ---------- */
@@ -246,9 +246,20 @@ var store={
 var me = lsGet('coc.role','police');
 if(!ROLES[me]) me='police';
 function role(){return ROLES[me]}
-function actor(){return {role:me,label:role().label,org:role().org}}
+function myName(){return lsGet('coc.name.'+me,role().label+' 담당자')}
+function myKey(){return me+':'+myName()}
+function actor(){return {role:me,label:role().label,org:role().org,name:myName()}}
+/* 열람 권한: 등록자·인계/인수 이력이 있는 사람·추가된 담당자, 그리고 지금 넘겨받는 사람만 */
+function canView(it){
+  if(!it||!it.access)return true;
+  if(it.access.indexOf(myKey())>=0)return true;
+  if(it.status==='transit'&&it.to===me&&(!it.toName||it.toName===myName()))return true;
+  return false;
+}
+function addAccess(it,key){it.access=it.access||[];if(it.access.indexOf(key)<0)it.access.push(key)}
+function keyLabel(k){var p=k.split(':');return ((ROLES[p[0]]||{}).label||p[0])+' · '+p.slice(1).join(':')}
 function renderTop(){
-  $('#whoLabel').textContent=role().org;
+  $('#whoLabel').textContent=role().org+' · '+myName();
   $('#roleSeg').innerHTML=Object.keys(ROLES).map(function(k){
     return '<button type="button" data-role="'+k+'" aria-pressed="'+(k===me)+'">'+esc(ROLES[k].label)+'</button>';
   }).join('');
@@ -328,8 +339,19 @@ var view={name:'home'};
 var app=$('#app');
 function go(v){view=v;render();window.scrollTo(0,0)}
 
+var GUARDED=['detail','receive','cert','link','contents','handover','repack','damage'];
+function lockedHtml(it){
+  var holder=ROLES[it.status==='transit'?it.to:it.holder]||{};
+  return '<p class="eyebrow">QR <span class="mono">'+esc(it.code)+'</span></p><h1>열람 제한</h1>'+
+  '<div class="banner bad" style="flex-direction:column;gap:4px"><b>이 증거물은 사건 담당자만 볼 수 있습니다.</b><span>내용물, 현장번호, 사건번호, 이력은 표시하지 않습니다.</span></div>'+
+  '<div class="card"><span class="small">현재 보관 기능</span><b>'+esc(holder.label||'')+'</b><span class="small">'+esc(holder.org||'')+'</span><span class="small">발견·습득한 경우 위 기능에 연락하세요.</span></div>'+
+  '<p class="small" style="margin:0">지금 신분: '+esc(role().label+' · '+myName())+'</p>'+backBtn();
+}
 async function render(){
   renderTop();
+  if(view.code&&GUARDED.indexOf(view.name)>=0){
+    try{var it0=await store.getItem(view.code);if(it0&&!canView(it0)){app.innerHTML=lockedHtml(it0);return}}catch(e){}
+  }
   var fn=VIEWS[view.name]||VIEWS.home;
   try{app.innerHTML=await fn(view)}catch(e){console.error(e);app.innerHTML='<div class="banner bad">화면을 불러오지 못했습니다. 다시 시도해 주세요.</div>'+backBtn()}
 }
@@ -350,7 +372,8 @@ var VIEWS={};
 /* ---------- home ---------- */
 VIEWS.home=async function(){
   var items=await store.listItems();
-  var incoming=items.filter(function(i){return i.status==='transit'&&i.to===me});
+  var incoming=items.filter(function(i){return i.status==='transit'&&i.to===me&&canView(i)});
+  items=items.filter(canView);
   var mine=items.filter(function(i){return i.holder===me&&i.status!=='transit'&&i.status!=='repacked'});
   var sending=items.filter(function(i){return i.holder===me&&i.status==='transit'});
   var site=currentSite();
@@ -367,6 +390,7 @@ VIEWS.home=async function(){
   (incoming.length?'<div class="list-h"><h2>인수 대기</h2><span class="pill warn">'+incoming.length+'</span></div>'+list(incoming,''):'')+
   '<div class="list-h"><h2>내가 보관 중</h2><span class="small">'+mine.length+'건</span></div>'+list(mine,'아직 없습니다. 스티커를 찍어 첫 증거물을 등록하세요.')+
   (sending.length?'<div class="list-h"><h2>인계 중</h2><span class="small">상대 인수 대기</span></div>'+list(sending,''):'')+
+  '<form class="card" id="nameForm"><label for="myName" style="font-weight:700">내 이름 <span class="small" style="font-weight:400">(시연용 · '+esc(role().label)+')</span></label><div style="display:grid;grid-template-columns:1fr auto;gap:8px"><input class="input" id="myName" value="'+esc(myName())+'"><button class="btn outline" type="submit">저장</button></div><span class="small">사건 담당자로 등록된 이름만 그 증거물을 볼 수 있습니다.</span></form>'+
   '<button class="btn" type="button" data-act="sheet">시연용 QR 스티커 보기</button>'+
   '<div class="card"><h2>시연 순서</h2><ol class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">'+
   '<li>다른 화면(PC 등)에 시연용 QR 스티커를 띄우거나 인쇄합니다.</li><li>지역경찰로 촬영 → 등록 → 내용물 → 봉인 사진 → 봉인 완료.</li><li>인계하기에서 과학수사를 고릅니다.</li><li>위에서 신분을 과학수사로 바꾸고 같은 QR을 찍어 인수합니다.</li><li>과학수사에서 다시 형사(수사)나 지역경찰로 인계해 봅니다.</li><li>사건번호 연결, 연계확인서, 위변조 시험을 확인합니다.</li></ol>'+
@@ -450,6 +474,7 @@ VIEWS.detail=async function(v){
     if(e.type==='link')extra=' · '+esc([b.data.kics&&'KICS '+b.data.kics,b.data.scas&&'SCAS '+b.data.scas].filter(Boolean).join(', '));
     if(e.type==='receive')extra=' · '+esc(b.data.level||'');
     if(e.type==='repack')extra=' → '+esc((b.data.to||[]).join(', '));
+    if(e.type==='access')extra=' · '+esc(keyLabel(b.data.key||''));
     if(e.type==='from')extra=' ← '+esc(b.data.from||'')+' · '+(b.data.attach==='item'?'증거물에 부착':'포장에 부착');
     return '<div class="ev"><span class="dot"></span><div class="body"><b>'+esc(EVLABEL[e.type]||e.type)+extra+'</b><div class="small">'+fmtTime(b.at)+' · '+esc(b.actor?b.actor.label+' ('+b.actor.org+')':'')+'</div><div class="hash">#'+e.seq+' '+esc(e.hash.slice(0,16))+'…</div></div></div>';
   }).join('');
@@ -473,6 +498,9 @@ VIEWS.detail=async function(v){
   (it.parent?'<div class="banner info" style="justify-content:space-between;align-items:center"><span>재포장 전 봉투 <b class="mono">'+esc(it.parent)+'</b>에서 이어진 포장</span><button type="button" class="btn ghost" data-open="'+esc(it.parent)+'" style="min-height:40px">이전 이력</button></div>':'')+
   (it.status==='damaged'&&it.damage?'<div class="banner bad">봉인 이상: '+esc(it.damage.type)+' · 내용물 '+(it.damage.contentsOk?'이상 없음':'이상 있음')+'</div>':'')+
   caseHtml+
+  (it.access?'<div class="card"><div class="list-h"><h2>열람 가능한 담당자</h2><span class="small">'+it.access.length+'명</span></div><div class="chips">'+it.access.map(function(k){return '<span class="pill">'+esc(keyLabel(k))+'</span>'}).join('')+'</div>'+
+    (isHolder?'<form id="accessForm" style="display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:center"><label for="accRole" class="vh">기능</label><select id="accRole" class="input" style="height:44px;font-size:14px;padding:0 8px">'+Object.keys(ROLES).map(function(k){return '<option value="'+k+'">'+esc(ROLES[k].label)+'</option>'}).join('')+'</select><label for="accName" class="vh">이름</label><input id="accName" class="input" style="height:44px;font-size:15px" placeholder="담당자 이름 추가"><button class="btn outline" type="submit" style="min-height:44px">추가</button></form>':'')+
+    '<span class="small">이 사람들 외에는 QR을 찍어도 내용이 보이지 않습니다.</span></div>':'')+
   '<div class="card" style="flex-direction:row;align-items:center;gap:12px">'+(it.sealThumb?'<img class="thumb" alt="봉인 전 사진" src="'+it.sealThumb+'">':'<span class="thumb">사진 없음</span>')+
   '<span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b>내용물 '+totalQty(it.contents)+'점</b><span class="small" style="overflow-wrap:anywhere">'+esc(contentsLine(it.contents))+'</span></span></div>'+
   (ver.ok?'<div class="banner good">무결성 확인 · 기록 '+ver.count+'건 모두 일치</div>':'<div class="banner bad">무결성 불일치 · '+ver.at+'번째 기록부터 맞지 않습니다</div>')+
@@ -487,7 +515,7 @@ VIEWS.handover=async function(v){
   v.to=v.to||others[0];
   return '<p class="eyebrow">'+esc(kindLabel(it))+' <span class="mono">'+esc(it.code)+'</span> · '+totalQty(it.contents)+'점</p><h1>어느 기능에 넘기나요?</h1>'+
   '<div style="display:flex;flex-direction:column;gap:8px">'+others.map(function(k){return '<button type="button" class="chip" style="min-height:64px;text-align:left;padding:8px 14px" data-to="'+k+'" aria-pressed="'+(v.to===k)+'"><b>'+esc(ROLES[k].label)+'</b><br><span class="small">'+esc(ROLES[k].org)+'</span></button>'}).join('')+'</div>'+
-  '<div class="field"><label for="toName">받는 사람 <span class="small" style="font-weight:400">(선택 · 예: 강력1팀 경사 홍길동)</span></label><input class="input" id="toName" placeholder="팀·계급·이름" value="'+esc(v.toName||'')+'"></div>'+
+  '<div class="field"><label for="toName">받는 사람 이름 <span class="small" style="font-weight:400">(적으면 그 사람만 인수·열람 가능)</span></label><input class="input" id="toName" placeholder="예: 홍길동" value="'+esc(v.toName||'')+'"></div>'+
   '<div class="banner info">상대가 같은 QR을 찍고 인수를 확인해야 인계가 끝납니다.</div>'+
   '<button class="btn primary" type="button" data-act="doHandover">인계 · '+esc(ROLES[v.to].label)+'에게</button>'+
   '<button class="btn ghost" type="button" data-act="back">취소</button>';
@@ -565,7 +593,7 @@ VIEWS.damage=async function(v){
 VIEWS.link=async function(v){
   var it=await store.getItem(v.code);
   var all=await store.listItems();
-  var same=all.filter(function(i){return i.site===it.site});
+  var same=all.filter(function(i){return i.site===it.site&&i.status!=='repacked'&&canView(i)});
   if(!v.sel){v.sel={};same.forEach(function(i){v.sel[i.code]=true})}
   var yr=new Date().getFullYear();
   var n=same.filter(function(i){return v.sel[i.code]}).length;
@@ -667,7 +695,7 @@ document.addEventListener('click',function(e){
     doReceiveRepack:function(){guard(async function(){
       var v=view,it=await store.getItem(v.code),lv=levelFor(it.contents);
       await appendEvent(v.code,'receive',{level:lv.name,damageAck:!!it.damage});
-      it.holder=me;it.to=null;it.status=it.damage?'damaged':'sealed';await store.putItem(it);
+      it.holder=me;it.to=null;it.toName=null;addAccess(it,myKey());it.status=it.damage?'damaged':'sealed';await store.putItem(it);
       toast('인수했습니다. 새 포장 바코드를 넣으세요.');
       go({name:'repack',code:v.code,from:{name:'detail',code:v.code}});
     })},
@@ -681,7 +709,7 @@ document.addEventListener('click',function(e){
       for(var pi=0;pi<v.packs.length;pi++){
         var p=v.packs[pi];
         var contents=rows.filter(function(r,ri){return v.assign[ri]===pi}).map(function(r){return {name:r.name,qty:r.qty,nature:(r.nature||[]).slice()}});
-        var nit={code:p.code,kind:'bag',site:old.site,crime:old.crime,report112:old.report112||'',holder:me,status:'sealed',to:null,contents:contents,kics:old.kics||'',scas:old.scas||'',parent:old.code,attach:p.attach,createdAt:new Date().toISOString()};
+        var nit={code:p.code,kind:'bag',site:old.site,crime:old.crime,report112:old.report112||'',holder:me,status:'sealed',to:null,contents:contents,kics:old.kics||'',scas:old.scas||'',parent:old.code,attach:p.attach,access:(old.access||[myKey()]).slice(),createdAt:new Date().toISOString()};
         await store.putItem(nit);
         await appendEvent(p.code,'from',{from:old.code,parentHash:parentHash,attach:p.attach});
         await appendEvent(p.code,'seal',{contents:contents,contentsHash:await sha256Text(JSON.stringify(contents)),photoHash:''});
@@ -701,7 +729,7 @@ document.addEventListener('click',function(e){
         await store.addSite({key:key,site:site.site,role:me,at:new Date().toISOString()});
         lsSet('coc.site.'+me,site);
       }
-      var it={code:v.code,kind:v.kind,site:site.site,crime:site.crime,report112:r112.trim(),holder:me,status:'open',to:null,contents:[],kics:'',scas:'',createdAt:new Date().toISOString()};
+      var it={code:v.code,kind:v.kind,site:site.site,crime:site.crime,report112:r112.trim(),holder:me,status:'open',to:null,contents:[],kics:'',scas:'',access:[myKey()],createdAt:new Date().toISOString()};
       await store.putItem(it);
       await appendEvent(v.code,'register',{kind:v.kind,site:site.site,report112:it.report112});
       toast('등록했습니다 · '+site.site);
@@ -721,14 +749,14 @@ document.addEventListener('click',function(e){
       var v=view,it=await store.getItem(v.code);
       var toName=(($('#toName')||{}).value||'').trim();
       await appendEvent(v.code,'handover',{to:v.to,toName:toName,contentsCount:totalQty(it.contents)});
-      it.status='transit';it.to=v.to;await store.putItem(it);
+      it.status='transit';it.to=v.to;it.toName=toName||null;await store.putItem(it);
       toast(ROLES[v.to].label+'에게 인계했습니다. 상대가 인수하면 끝납니다.');
       go({name:'detail',code:v.code});
     })},
     doReceive:function(){guard(async function(){
       var v=view,it=await store.getItem(v.code),lv=levelFor(it.contents);
       await appendEvent(v.code,'receive',{level:lv.name,damageAck:!!it.damage});
-      it.holder=me;it.to=null;it.status=it.damage?'damaged':'sealed';await store.putItem(it);
+      it.holder=me;it.to=null;it.toName=null;addAccess(it,myKey());it.status=it.damage?'damaged':'sealed';await store.putItem(it);
       toast('인수했습니다');
       go({name:'detail',code:v.code});
     })},
@@ -770,6 +798,14 @@ document.addEventListener('click',function(e){
 document.addEventListener('submit',function(e){
   e.preventDefault();
   if(e.target.id==='manualForm'){openCode($('#codeInput').value)}
+  if(e.target.id==='nameForm'){var nm=$('#myName').value.trim().replace(/:/g,'');if(!nm){toast('이름을 입력하세요');return}lsSet('coc.name.'+me,nm);toast('이름을 저장했습니다');render()}
+  if(e.target.id==='accessForm'){guard(async function(){
+    var nm=$('#accName').value.trim().replace(/:/g,''),rl=$('#accRole').value;if(!nm){toast('이름을 입력하세요');return}
+    var it=await store.getItem(view.code),key=rl+':'+nm;
+    if((it.access||[]).indexOf(key)>=0){toast('이미 담당자입니다');return}
+    await appendEvent(it.code,'access',{key:key});addAccess(it,key);await store.putItem(it);
+    toast(keyLabel(key)+' 님을 담당자로 추가했습니다');render();
+  })}
   if(e.target.id==='packForm'){
     var c=normCode($('#packCode').value);
     if(!c){toast('바코드 번호를 4자리 이상 넣으세요');return}
