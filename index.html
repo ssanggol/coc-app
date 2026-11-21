@@ -49,7 +49,7 @@ button{cursor:pointer}
 .top-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .brand{font-weight:700;font-size:16px}
 .who{font-size:12px;color:var(--muted)}
-.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;background:var(--bg);border-radius:10px;padding:3px}
+.seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;background:var(--bg);border-radius:10px;padding:3px}
 .seg button{border:0;background:transparent;border-radius:8px;min-height:36px;font-size:13px;color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.12)}
 main{padding-block:16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
@@ -146,11 +146,13 @@ td.mono{font-size:12px}
 </header>
 <main><div class="wrap" id="app"></div></main>
 <input type="file" id="scanFile" accept="image/*" capture="environment" class="vh" aria-label="QR 촬영">
+<input type="file" id="barcodeFile" accept="image/*" capture="environment" class="vh" aria-label="바코드 촬영">
 <input type="file" id="photoFile" accept="image/*" capture="environment" class="vh" aria-label="사진 촬영">
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="cam" id="cam" hidden><video id="camVideo" playsinline muted></video><div class="frame" aria-hidden="true"></div><div class="msg" id="camMsg">QR을 네모 안에 맞추세요</div><div class="bar"><button type="button" id="camClose">닫기</button><label for="scanFile">사진으로 찍기</label></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script>
 (function(){
@@ -160,12 +162,13 @@ td.mono{font-size:12px}
 var ROLES = {
   police:   {key:'police',   label:'지역경찰', org:'서울청 방배서 남태령지구대', prefix:'서울100남'},
   detective:{key:'detective',label:'형사(수사)', org:'서울청 방배서 형사·수사과', prefix:'서울100형'},
-  forensic: {key:'forensic', label:'과학수사', org:'서울청 광역과학수사 6팀',    prefix:'서울광6'}
+  forensic: {key:'forensic', label:'과학수사', org:'서울청 광역과학수사 6팀',    prefix:'서울광6'},
+  storage:  {key:'storage',  label:'압수물 관리', org:'서울청 방배서 압수물보관실', prefix:'서울100보'}
 };
 var CRIMES = ['절도','강도','살인','방화','사기','폭행','상해','성폭력','강추','주침','무취','교통','화재','변사','미상'];
 var PRESETS = ['담배꽁초','휴대폰','면봉','흉기','의류','현금','지갑','신발'];
-var EVLABEL = {register:'등록', seal:'봉인', handover:'인계', receive:'인수', damage:'손상 보고', link:'사건번호 연결', repack:'재포장', from:'재포장으로 생성', access:'담당자 추가'};
-var STATUS = {open:['봉인 전','warn'], sealed:['봉인됨',''], transit:['인계 중',''], damaged:['봉인 이상','bad'], repacked:['재포장됨','good']};
+var EVLABEL = {register:'등록', seal:'봉인', handover:'인계', receive:'인수', damage:'손상 보고', link:'사건번호 연결', repack:'재포장', from:'재포장으로 생성', access:'담당자 추가', intake:'입고 · QR↔바코드 일치 등록', open:'개봉'};
+var STATUS = {open:['봉인 전','warn'], sealed:['봉인됨',''], transit:['인계 중',''], damaged:['봉인 이상','bad'], repacked:['재포장됨','good'], opened:['개봉됨','warn']};
 
 /* ---------- small helpers ---------- */
 function $(s){return document.querySelector(s)}
@@ -209,8 +212,11 @@ function sha256Text(s){return sha256Bytes(new TextEncoder().encode(s))}
 /* ---------- storage: shared db when available, memory otherwise ---------- */
 var db=null, dl=null;
 var mem=lsGet("coc.data",null)||{items:{},events:{},sites:[]};
+mem.alias=mem.alias||{};
 function persist(){try{localStorage.setItem("coc.data",JSON.stringify(mem))}catch(e){toast("폰 저장 공간이 부족합니다. 백업 후 초기화하세요.")}}
 var store={
+  getAlias:async function(bc){return mem.alias[bc]||null},
+  setAlias:async function(bc,code){mem.alias[bc]=code;persist()},
   getItem:async function(code){
     if(db){var s=await db.doc('items/'+code).get();return s.exists?clone(s.data()):null}
     return mem.items[code]?clone(mem.items[code]):null;
@@ -318,6 +324,37 @@ async function decodeQR(file){
     return null;
   }finally{URL.revokeObjectURL(o.url)}
 }
+/* 1D 바코드(+QR) 사진 판독: ZXing을 폰에서 불러와 사용, 실패하면 직접 입력 */
+function zxingRead(canvas){
+  if(!window.ZXing)return null;
+  var Z=window.ZXing,w=canvas.width,h=canvas.height;
+  var d=canvas.getContext('2d').getImageData(0,0,w,h).data,lum=new Uint8ClampedArray(w*h);
+  for(var i=0,j=0;i<lum.length;i++,j+=4)lum[i]=(d[j]*299+d[j+1]*587+d[j+2]*114)/1000;
+  var hints=new Map();
+  hints.set(Z.DecodeHintType.TRY_HARDER,true);
+  hints.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.CODE_128,Z.BarcodeFormat.CODE_39,Z.BarcodeFormat.CODE_93,Z.BarcodeFormat.EAN_13,Z.BarcodeFormat.EAN_8,Z.BarcodeFormat.ITF,Z.BarcodeFormat.CODABAR,Z.BarcodeFormat.UPC_A,Z.BarcodeFormat.QR_CODE,Z.BarcodeFormat.DATA_MATRIX]);
+  try{
+    var src=new Z.RGBLuminanceSource(lum,w,h);
+    var r=new Z.MultiFormatReader().decode(new Z.BinaryBitmap(new Z.HybridBinarizer(src)),hints);
+    return r?r.getText():null;
+  }catch(e){return null}
+}
+function rotate90(c){var r=document.createElement('canvas');r.width=c.height;r.height=c.width;var x=r.getContext('2d');x.translate(r.width,0);x.rotate(Math.PI/2);x.drawImage(c,0,0);return r}
+async function decodeBarcode(file){
+  var o=await loadImage(file);
+  try{
+    if('BarcodeDetector' in window){
+      try{var bd=new BarcodeDetector();var found=await bd.detect(o.img);if(found&&found.length)return found[0].rawValue}catch(e){}
+    }
+    var sizes=[1600,1100,2200];
+    for(var i=0;i<sizes.length;i++){
+      var c=drawScaled(o.img,sizes[i]).c;
+      var t=zxingRead(c)||zxingRead(rotate90(c));
+      if(t)return t;
+    }
+    return null;
+  }finally{URL.revokeObjectURL(o.url)}
+}
 async function photoInfo(file){
   var buf=await file.arrayBuffer();
   var h=await sha256Bytes(buf);
@@ -393,7 +430,7 @@ VIEWS.home=async function(){
   '<form class="card" id="nameForm"><label for="myName" style="font-weight:700">내 이름 <span class="small" style="font-weight:400">(시연용 · '+esc(role().label)+')</span></label><div style="display:grid;grid-template-columns:1fr auto;gap:8px"><input class="input" id="myName" value="'+esc(myName())+'"><button class="btn outline" type="submit">저장</button></div><span class="small">사건 담당자로 등록된 이름만 그 증거물을 볼 수 있습니다.</span></form>'+
   '<button class="btn" type="button" data-act="sheet">시연용 QR 스티커 보기</button>'+
   '<div class="card"><h2>시연 순서</h2><ol class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">'+
-  '<li>다른 화면(PC 등)에 시연용 QR 스티커를 띄우거나 인쇄합니다.</li><li>지역경찰로 촬영 → 등록 → 내용물 → 봉인 사진 → 봉인 완료.</li><li>인계하기에서 과학수사를 고릅니다.</li><li>위에서 신분을 과학수사로 바꾸고 같은 QR을 찍어 인수합니다.</li><li>과학수사에서 다시 형사(수사)나 지역경찰로 인계해 봅니다.</li><li>사건번호 연결, 연계확인서, 위변조 시험을 확인합니다.</li></ol>'+
+  '<li>다른 화면(PC 등)에 시연용 QR 스티커를 띄우거나 인쇄합니다.</li><li>지역경찰로 촬영 → 등록 → 내용물 → 봉인 사진 → 봉인 완료.</li><li>인계하기에서 과학수사를 고릅니다.</li><li>위에서 신분을 과학수사로 바꾸고 같은 QR을 찍어 인수합니다.</li><li>과학수사에서 다시 형사(수사)나 지역경찰로 인계해 봅니다.</li><li>압수물 관리로 인계 → 인수하고 바로 입고 → 바코드를 찍어 QR과 일치 등록합니다. 이후 바코드 번호로도 같은 봉투가 열립니다.</li><li>사건번호 연결, 연계확인서, 위변조 시험을 확인합니다.</li></ol>'+
   '</div>'+
   '<div class="card"><h2>이 폰의 기록</h2><p class="small" style="margin:0">기록은 이 폰 안에만 저장됩니다. 시연용 가짜 데이터만 쓰세요.</p>'+
   '<div class="btn-row"><button class="btn" type="button" data-act="backup">백업 내보내기</button><button class="btn" type="button" data-act="resetAsk">기록 지우기</button></div>'+
@@ -475,15 +512,21 @@ VIEWS.detail=async function(v){
     if(e.type==='receive')extra=' · '+esc(b.data.level||'');
     if(e.type==='repack')extra=' → '+esc((b.data.to||[]).join(', '));
     if(e.type==='access')extra=' · '+esc(keyLabel(b.data.key||''));
+    if(e.type==='intake')extra=' · 바코드 '+esc(b.data.barcode||'')+(b.data.byPhoto?' (사진 판독)':' (직접 입력)');
+    if(e.type==='open')extra=' · '+esc(b.data.reason||'');
     if(e.type==='from')extra=' ← '+esc(b.data.from||'')+' · '+(b.data.attach==='item'?'증거물에 부착':'포장에 부착');
     return '<div class="ev"><span class="dot"></span><div class="body"><b>'+esc(EVLABEL[e.type]||e.type)+extra+'</b><div class="small">'+fmtTime(b.at)+' · '+esc(b.actor?b.actor.label+' ('+b.actor.org+')':'')+'</div><div class="hash">#'+e.seq+' '+esc(e.hash.slice(0,16))+'…</div></div></div>';
   }).join('');
   var holderTxt=it.status==='transit'?'인계 중 → '+(ROLES[it.to]||{}).label:'보관: '+(ROLES[it.holder]||{}).label;
   var actions='';
-  if(isHolder&&(it.status==='sealed'||it.status==='damaged')){
-    actions='<button class="btn primary" type="button" data-act="handover">인계하기</button>'+
-    '<button class="btn outline" type="button" data-act="repack">재포장 · 새 포장 바코드</button>'+
-    '<div class="btn-row"><button class="btn" type="button" data-act="cert">연계확인서</button><button class="btn" type="button" data-act="damage">손상 보고</button></div>';
+  if(isHolder&&(it.status==='sealed'||it.status==='damaged'||it.status==='opened')){
+    var isStore=me==='storage',needIntake=isStore&&!it.barcode&&it.status==='sealed';
+    actions=(needIntake?'<button class="btn primary" type="button" data-act="intake">입고 · 바코드 부착</button>':'')+
+    '<button class="btn '+(needIntake?'outline':'primary')+'" type="button" data-act="handover">인계하기</button>'+
+    (isStore?'<button class="btn outline" type="button" data-act="repack">재포장 · 새 포장 바코드</button>':'')+
+    (it.status==='sealed'?'<button class="btn" type="button" data-act="openpkg">개봉 기록 (감식 등)</button>':'')+
+    '<div class="btn-row"><button class="btn" type="button" data-act="cert">연계확인서</button><button class="btn" type="button" data-act="damage">손상 보고</button></div>'+
+    (isStore?'':'<p class="small" style="margin:0">바코드 부착(입고·재포장)은 압수물 관리자만 할 수 있습니다.</p>');
   }else if(isHolder&&it.status==='open'){
     actions='<button class="btn primary" type="button" data-act="contents">내용물 입력 · 봉인</button>';
   }else if(it.status==='transit'&&it.to===me){
@@ -494,6 +537,8 @@ VIEWS.detail=async function(v){
   return '<p class="eyebrow">'+esc(it.site)+'</p>'+
   '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><h1>'+esc(kindLabel(it))+' <span class="mono">'+esc(it.code)+'</span></h1>'+statusPill(it)+'</div>'+
   '<p class="small" style="margin:0">'+esc(holderTxt)+'</p>'+
+  (it.barcode?'<div class="banner good">QR <b class="mono">'+esc(it.code)+'</b> ↔ 바코드 <b class="mono">'+esc(it.barcode)+'</b> 일치 등록됨</div>':'')+
+  (it.status==='opened'&&it.opened?'<div class="banner warn">개봉됨 · '+esc(it.opened.reason)+' · 압수물 관리자에게 넘겨 재포장해야 합니다</div>':'')+
   (it.status==='repacked'?'<div class="banner good" style="flex-direction:column;gap:8px"><span>재포장되어 이 봉투의 기록은 끝났습니다. 이력은 새 포장으로 이어집니다.</span><div class="chips">'+(it.children||[]).map(function(c){return '<button type="button" class="chip sm mono" data-open="'+esc(c)+'">새 포장 '+esc(c)+'</button>'}).join('')+'</div></div>':'')+
   (it.parent?'<div class="banner info" style="justify-content:space-between;align-items:center"><span>재포장 전 봉투 <b class="mono">'+esc(it.parent)+'</b>에서 이어진 포장</span><button type="button" class="btn ghost" data-open="'+esc(it.parent)+'" style="min-height:40px">이전 이력</button></div>':'')+
   (it.status==='damaged'&&it.damage?'<div class="banner bad">봉인 이상: '+esc(it.damage.type)+' · 내용물 '+(it.damage.contentsOk?'이상 없음':'이상 있음')+'</div>':'')+
@@ -531,7 +576,7 @@ VIEWS.receive=async function(v){
   var nowHash=await sha256Text(JSON.stringify(it.contents||[]));
   var listOk=seal&&seal.data.contentsHash===nowHash;
   var lv=levelFor(it.contents);
-  var damaged=it.status==='damaged'||!!it.damage;
+  var damaged=it.status==='damaged'||!!it.opened||!!it.damage;
   var canGo=ver.ok&&(!damaged||v.ack);
   return '<p class="eyebrow">넘겨받는 '+esc(kindLabel(it))+'</p><h1><span class="mono">'+esc(it.code)+'</span> 인수</h1>'+
   '<div class="card" style="flex-direction:row;justify-content:space-between;align-items:center;gap:8px"><span style="display:flex;flex-direction:column"><span class="small">인계자</span><b>'+esc(ho?ho.actor.label:'')+'</b><span class="small">'+esc(ho?ho.actor.org:'')+'</span></span><span aria-hidden="true">→</span><span style="display:flex;flex-direction:column;text-align:right"><span class="small">인수자</span><b>'+esc(role().label)+' (나)</b></span></div>'+
@@ -541,15 +586,38 @@ VIEWS.receive=async function(v){
   '<div class="row"><span>무결성</span><b style="color:'+(ver.ok?'var(--good)':'var(--bad)')+'">'+(ver.ok?'확인됨 · '+ver.count+'건':'불일치')+'</b></div></div>'+
   '<div class="card"><span class="small">확인 수준</span><b>'+esc(lv.name)+'</b><span class="small">'+esc(lv.why)+'</span></div>'+
   '<div class="card" style="flex-direction:row;align-items:center;gap:12px">'+(it.sealThumb?'<img class="thumb" style="width:88px;height:88px" alt="봉인 전 사진" src="'+it.sealThumb+'">':'<span class="thumb">사진 없음</span>')+'<span class="small">봉인 전 사진과 실물을 대조한 뒤 인수를 확인하세요. 내용물: '+esc(contentsLine(it.contents))+'</span></div>'+
-  (damaged?'<label class="banner bad" style="cursor:pointer"><input type="checkbox" id="ackDamage"'+(v.ack?' checked':'')+' style="width:22px;height:22px;margin:0;flex-shrink:0"><span>봉인 이상('+esc(it.damage?it.damage.type:'')+')을 확인했습니다</span></label>':'')+
+  (damaged?'<label class="banner bad" style="cursor:pointer"><input type="checkbox" id="ackDamage"'+(v.ack?' checked':'')+' style="width:22px;height:22px;margin:0;flex-shrink:0"><span>'+(it.opened?'개봉된 상태('+esc(it.opened?it.opened.reason:'')+')임':'봉인 이상('+esc(it.damage?it.damage.type:'')+')')+'을 확인했습니다</span></label>':'')+
   '<button class="btn primary" type="button" data-act="doReceive"'+(canGo?'':' disabled')+'>인수 확인</button>'+
-  '<button class="btn outline" type="button" data-act="doReceiveRepack"'+(canGo?'':' disabled')+'>인수하고 바로 재포장</button>'+
+  (me==='storage'?(it.barcode||it.opened||it.damage?'<button class="btn outline" type="button" data-act="doReceiveRepack"'+(canGo?'':' disabled')+'>인수하고 바로 재포장</button>':'<button class="btn outline" type="button" data-act="doReceiveIntake"'+(canGo?'':' disabled')+'>인수하고 바로 입고 · 바코드 부착</button>'):'')+
   '<button class="btn warn" type="button" data-act="damage">이상 있음 보고</button>'+backBtn('나중에');
+};
+
+/* ---------- intake (압수물 관리자: QR 봉투에 바코드 부착) ---------- */
+VIEWS.intake=async function(v){
+  var it=await store.getItem(v.code);
+  if(me!=='storage')return '<h1>입고</h1><div class="banner bad">입고와 바코드 부착은 압수물 관리자만 할 수 있습니다.</div><button class="btn ghost" type="button" data-act="back">돌아가기</button>';
+  return '<p class="eyebrow">'+esc(it.site)+'</p><h1>입고 · 바코드 부착</h1>'+
+  '<div class="card"><span class="small">이 봉투의 QR</span><b class="mono" style="font-size:18px">'+esc(it.code)+'</b><span class="small">'+esc(contentsLine(it.contents))+' · '+totalQty(it.contents)+'점</span></div>'+
+  '<p class="small" style="margin:0">출력한 압수물 바코드를 같은 봉투에 붙이고, 사진으로 찍거나 번호를 입력하세요. 이후 QR과 바코드 어느 쪽을 찍어도 이 봉투가 열립니다.</p>'+
+  '<label class="btn outline" for="barcodeFile">바코드 사진으로 찍기</label>'+
+  '<div class="field"><label for="intakeCode">바코드 번호</label><input class="input mono" id="intakeCode" maxlength="30" autocapitalize="characters" placeholder="사진 판독 또는 직접 입력" value="'+esc(v.intakeCode||'')+'">'+
+  (v.byPhoto?'<span class="small" style="color:var(--good)">사진에서 읽은 번호입니다. 실물 바코드 아래 숫자와 같은지 확인하세요.</span>':'')+'</div>'+
+  '<button class="btn primary" type="button" data-act="doIntake">QR ↔ 바코드 일치 등록</button>'+
+  '<button class="btn ghost" type="button" data-act="back">취소</button>';
+};
+VIEWS.openpkg=async function(v){
+  var it=await store.getItem(v.code);
+  v.reason=v.reason||'감식';
+  return '<p class="eyebrow">'+esc(kindLabel(it))+' <span class="mono">'+esc(it.code)+'</span></p><h1>개봉 기록</h1>'+
+  '<div class="chips">'+['감식','내용 확인','기타'].map(function(r){return '<button type="button" class="chip" data-reason="'+r+'" aria-pressed="'+(v.reason===r)+'">'+r+'</button>'}).join('')+'</div>'+
+  '<p class="small" style="margin:0">개봉하면 봉투는 \'개봉됨\'으로 표시되고, 압수물 관리자가 새 포장·바코드로 재포장해야 다시 봉인됩니다. 개봉자와 시각은 자동 기록됩니다.</p>'+
+  '<button class="btn warn" type="button" data-act="doOpen">개봉 기록하기</button><button class="btn ghost" type="button" data-act="back">취소</button>';
 };
 
 /* ---------- repack ---------- */
 VIEWS.repack=async function(v){
   var it=await store.getItem(v.code);
+  if(me!=='storage')return '<h1>재포장</h1><div class="banner bad">새 포장 바코드는 압수물 관리자만 붙일 수 있습니다. 압수물 관리자에게 인계하세요.</div><button class="btn ghost" type="button" data-act="back">돌아가기</button>';
   v.packs=v.packs||[];v.assign=v.assign||{};
   var rows=it.contents||[];
   var left=0;rows.forEach(function(r,i){var a=v.assign[i];if(a===undefined||!v.packs[a])left+=r.qty});
@@ -567,6 +635,7 @@ VIEWS.repack=async function(v){
   return '<p class="eyebrow">'+esc(kindLabel(it))+' <span class="mono">'+esc(it.code)+'</span> · '+totalQty(rows)+'점 → 새 포장</p><h1>재포장</h1>'+
   '<p class="small" style="margin:0">새 포장에 붙인 압수물 바코드(또는 새 QR) 번호를 넣으세요. 새 포장에 QR을 다시 붙일 필요는 없습니다.</p>'+
   '<form class="btn-row" id="packForm" style="grid-template-columns:1fr auto"><label for="packCode" class="vh">새 포장 바코드 번호</label><input class="input mono" id="packCode" maxlength="30" autocapitalize="characters" placeholder="바코드 번호" value="'+esc(v.packInput||'')+'"><button class="btn outline" type="submit">추가</button></form>'+
+  '<label class="btn" for="barcodeFile">바코드 사진으로 찍어 넣기</label>'+
   packCards+
   (v.packs.length?'<div class="rows"><div class="row"><b>어느 포장에 담았나요?</b></div>'+assignRows+'</div>':'<p class="empty">바코드 번호를 추가하면 증거물을 포장별로 배정할 수 있습니다.</p>')+
   (v.packs.length?(left===0?'<div class="banner good">'+totalQty(rows)+'점 모두 새 포장에 배정됨 · 남은 증거물 0점</div>':'<div class="banner warn">아직 배정하지 않은 증거물 '+left+'점</div>'):'')+
@@ -645,9 +714,10 @@ function certFile(it,evs,ver){
 /* ---------- actions ---------- */
 async function openCode(raw){
   var code=normCode(raw);
-  if(!code){toast('6자리 번호를 찾지 못했습니다. QR 아래 번호를 확인하세요.');return}
+  if(!code){toast('번호를 찾지 못했습니다. QR·바코드 아래 번호를 확인하세요.');return}
   var it=await store.getItem(code);
-  if(!it)return go({name:'register',code:code});
+  if(!it){var al=await store.getAlias(code);if(al){toast('바코드 '+code+' → QR '+al+' 봉투');code=al;it=await store.getItem(al)}}
+  if(!it){if(!/^\d{6}$/.test(code)){toast('등록되지 않은 바코드입니다. 압수물 관리자의 입고 등록이 필요합니다.');return}return go({name:'register',code:code})}
   if(it.status==='transit'&&it.to===me)return go({name:'receive',code:code});
   if(it.status==='open'&&it.holder===me)return go({name:'contents',code:code});
   go({name:'detail',code:code});
@@ -671,6 +741,7 @@ document.addEventListener('click',function(e){
   if(d.to){var tn=$('#toName');if(tn)view.toName=tn.value;view.to=d.to;render();return}
   if(d.dtype){view.dtype=d.dtype;render();return}
   if(d.ok!==undefined){view.ok=d.ok==='1';render();return}
+  if(d.reason){view.reason=d.reason;render();return}
   if(d.assign||d.attach||d.rmpack!==undefined){
     var pc=$('#packCode');if(pc)view.packInput=pc.value;
     if(d.assign){var q=d.assign.split('|');view.assign[+q[0]]=+q[1]}
@@ -692,17 +763,41 @@ document.addEventListener('click',function(e){
     cert:function(){go({name:'cert',code:view.code,from:{name:view.name,code:view.code}})},
     damage:function(){go({name:'damage',code:view.code,from:{name:view.name,code:view.code}})},
     repack:function(){go({name:'repack',code:view.code,from:{name:'detail',code:view.code}})},
+    intake:function(){go({name:'intake',code:view.code,from:{name:'detail',code:view.code}})},
+    openpkg:function(){go({name:'openpkg',code:view.code,from:{name:'detail',code:view.code}})},
+    doOpen:function(){guard(async function(){
+      var v=view,it=await store.getItem(v.code);
+      await appendEvent(v.code,'open',{reason:v.reason});
+      it.status='opened';it.opened={reason:v.reason};await store.putItem(it);
+      toast('개봉을 기록했습니다');go({name:'detail',code:v.code});
+    })},
+    doReceiveIntake:function(){guard(async function(){
+      var v=view,it=await store.getItem(v.code),lv=levelFor(it.contents);
+      await appendEvent(v.code,'receive',{level:lv.name,damageAck:!!it.damage});
+      it.holder=me;it.to=null;it.toName=null;addAccess(it,myKey());it.status=it.opened?'opened':(it.damage?'damaged':'sealed');await store.putItem(it);
+      toast('인수했습니다. 바코드를 붙이고 등록하세요.');
+      go({name:'intake',code:v.code,from:{name:'detail',code:v.code}});
+    })},
+    doIntake:function(){guard(async function(){
+      var v=view,bc=normCode($('#intakeCode').value);
+      if(!bc){toast('바코드 번호를 4자리 이상 넣으세요');return}
+      if(bc===v.code||await store.getItem(bc)||await store.getAlias(bc)){toast('이미 쓰인 번호입니다: '+bc);return}
+      var it=await store.getItem(v.code);
+      await appendEvent(v.code,'intake',{barcode:bc,byPhoto:!!v.byPhoto&&v.intakeCode===bc});
+      it.barcode=bc;await store.putItem(it);await store.setAlias(bc,it.code);
+      toast('입고했습니다 · QR '+it.code+' ↔ 바코드 '+bc);go({name:'detail',code:v.code});
+    })},
     doReceiveRepack:function(){guard(async function(){
       var v=view,it=await store.getItem(v.code),lv=levelFor(it.contents);
       await appendEvent(v.code,'receive',{level:lv.name,damageAck:!!it.damage});
-      it.holder=me;it.to=null;it.toName=null;addAccess(it,myKey());it.status=it.damage?'damaged':'sealed';await store.putItem(it);
+      it.holder=me;it.to=null;it.toName=null;addAccess(it,myKey());it.status=it.opened?'opened':(it.damage?'damaged':'sealed');await store.putItem(it);
       toast('인수했습니다. 새 포장 바코드를 넣으세요.');
       go({name:'repack',code:v.code,from:{name:'detail',code:v.code}});
     })},
     doRepack:function(){guard(async function(){
       var v=view,old=await store.getItem(v.code),rows=old.contents||[];
       var codes=v.packs.map(function(p){return p.code});
-      for(var i=0;i<codes.length;i++){if(codes[i]===old.code||await store.getItem(codes[i])){toast(codes[i]+'은(는) 이미 등록된 번호입니다');return}}
+      for(var i=0;i<codes.length;i++){if(codes[i]===old.code||await store.getItem(codes[i])||await store.getAlias(codes[i])){toast(codes[i]+'은(는) 이미 등록된 번호입니다');return}}
       var evs=await store.listEvents(old.code);
       var parentHash=evs.length?evs[evs.length-1].hash:'';
       await appendEvent(old.code,'repack',{to:codes,parentHash:parentHash});
@@ -756,7 +851,7 @@ document.addEventListener('click',function(e){
     doReceive:function(){guard(async function(){
       var v=view,it=await store.getItem(v.code),lv=levelFor(it.contents);
       await appendEvent(v.code,'receive',{level:lv.name,damageAck:!!it.damage});
-      it.holder=me;it.to=null;it.toName=null;addAccess(it,myKey());it.status=it.damage?'damaged':'sealed';await store.putItem(it);
+      it.holder=me;it.to=null;it.toName=null;addAccess(it,myKey());it.status=it.opened?'opened':(it.damage?'damaged':'sealed');await store.putItem(it);
       toast('인수했습니다');
       go({name:'detail',code:v.code});
     })},
@@ -790,7 +885,7 @@ document.addEventListener('click',function(e){
     liveScan:function(){startScan()},
     backup:function(){guard(async function(){await shareFile('증거물연계_백업_'+yymmdd()+'.json',JSON.stringify(mem,null,1),'application/json')})},
     resetAsk:function(){view.resetAsk=true;render()},
-    reset:function(){mem={items:{},events:{},sites:[]};persist();Object.keys(ROLES).forEach(function(k){try{localStorage.removeItem('coc.site.'+k)}catch(e){}});toast('기록을 지웠습니다');go({name:'home'})}
+    reset:function(){mem={items:{},events:{},sites:[],alias:{}};persist();Object.keys(ROLES).forEach(function(k){try{localStorage.removeItem('coc.site.'+k)}catch(e){}});toast('기록을 지웠습니다');go({name:'home'})}
   };
   if(A[act])A[act]();
 });
@@ -825,9 +920,21 @@ document.addEventListener('change',function(e){
 });
 $('#scanFile').addEventListener('change',async function(){
   var f=this.files&&this.files[0];this.value='';if(!f)return;
-  toast('QR 읽는 중…');
-  try{var txt=await decodeQR(f);if(!txt){toast('QR을 찾지 못했습니다. 조금 더 가까이, 밝은 곳에서 찍어 주세요.');return}openCode(txt)}
+  toast('QR·바코드 읽는 중…');
+  try{var txt=await decodeQR(f)||await decodeBarcode(f);if(!txt){toast('QR·바코드를 찾지 못했습니다. 조금 더 가까이, 밝은 곳에서 찍어 주세요.');return}openCode(txt)}
   catch(e){toast('사진을 읽지 못했습니다. 다시 찍어 주세요.')}
+});
+$('#barcodeFile').addEventListener('change',async function(){
+  var f=this.files&&this.files[0];this.value='';if(!f)return;
+  if(!window.ZXing&&!('BarcodeDetector' in window)){toast('바코드 판독기를 불러오지 못했습니다(인터넷 확인). 번호를 직접 입력하세요.');return}
+  toast('바코드 읽는 중…');
+  try{
+    var raw=await decodeBarcode(f),bc=raw&&normCode(raw);
+    if(!bc){toast('바코드를 읽지 못했습니다. 바코드가 화면 가로로 꽉 차게, 흔들림 없이 다시 찍거나 번호를 직접 입력하세요.');return}
+    if(view.name==='intake'){view.intakeCode=bc;view.byPhoto=true}
+    else if(view.name==='repack'){view.packInput=bc}
+    toast('읽은 번호: '+bc+' · 실물 숫자와 같은지 확인하세요');render();
+  }catch(e){toast('사진을 읽지 못했습니다. 다시 찍어 주세요.')}
 });
 $('#photoFile').addEventListener('change',async function(){
   var f=this.files&&this.files[0];this.value='';if(!f)return;
