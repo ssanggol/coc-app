@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="증거물 연계">
+<meta name="theme-color" content="#FFFFFF">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<title>증거물 연계</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one phone-width column; sticky identity bar; each screen ends in one large primary action */
+:root{
+  --bg:#F3F5F8; --surface:#FFFFFF; --ink:#111827; --muted:#4B5563; --line:#DDE2EA;
+  --accent:#1F4E9E; --accent-soft:#E7EEF9; --accent-ink:#FFFFFF;
+  --good:#16794C; --good-soft:#E6F4EC; --warn:#A14A06; --warn-soft:#FFF3E6; --bad:#B42318; --bad-soft:#FDECEA;
+  --font:'Noto Sans KR',system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1218; --surface:#171D26; --ink:#EEF2F7; --muted:#A7B0BD; --line:#2A3340;
+  --accent:#6E9BE8; --accent-soft:#1C2A44; --accent-ink:#0B1220;
+  --good:#5CC48F; --good-soft:#12291D; --warn:#F2A35E; --warn-soft:#2E1F10; --bad:#F2867B; --bad-soft:#331614;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1218; --surface:#171D26; --ink:#EEF2F7; --muted:#A7B0BD; --line:#2A3340;
+  --accent:#6E9BE8; --accent-soft:#1C2A44; --accent-ink:#0B1220;
+  --good:#5CC48F; --good-soft:#12291D; --warn:#F2A35E; --warn-soft:#2E1F10; --bad:#F2867B; --bad-soft:#331614;
+  color-scheme:dark}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);-webkit-text-size-adjust:100%}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+img{max-width:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.5;margin:0}
+html{background:var(--surface)}
+
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.top{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line);
+  padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.top-in{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.brand{font-weight:700;font-size:16px}
+.who{font-size:12px;color:var(--muted)}
+.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;background:var(--bg);border-radius:10px;padding:3px}
+.seg button{border:0;background:transparent;border-radius:8px;min-height:36px;font-size:13px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+main{padding-block:16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1{font-size:22px;margin:0;line-height:1.3;text-wrap:balance}
+h2{font-size:15px;margin:0}
+.eyebrow{font-size:13px;color:var(--muted);margin:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.rows{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:2px 16px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);min-width:0}
+.row:last-child{border-bottom:0}
+.row .l{min-width:0;display:flex;flex-direction:column;gap:2px}
+.row .l b{font-weight:500;overflow-wrap:anywhere}
+.small{font-size:13px;color:var(--muted)}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:16px;font-weight:500;padding:0 16px;text-align:center}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700;font-size:17px;min-height:56px}
+.btn.outline{border-color:var(--accent);color:var(--accent)}
+.btn.warn{background:var(--warn);border-color:var(--warn);color:var(--surface);font-weight:700}
+.btn.ghost{border:0;background:transparent;color:var(--muted);min-height:44px;font-size:15px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1.5px solid var(--line);background:var(--surface);border-radius:10px;min-height:44px;padding:0 14px;font-size:15px}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);font-weight:700}
+.chip.sm{min-height:34px;padding:0 10px;font-size:13px;border-radius:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;border-radius:999px;padding:4px 10px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.pill.good{background:var(--good-soft);color:var(--good)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.banner{border-radius:12px;padding:12px 14px;font-weight:500;display:flex;gap:10px;align-items:flex-start}
+.banner.good{background:var(--good-soft);color:var(--good)}
+.banner.warn{background:var(--warn-soft);color:var(--warn)}
+.banner.bad{background:var(--bad-soft);color:var(--bad)}
+.banner.info{background:var(--accent-soft);color:var(--ink)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:14px;font-weight:700}
+.input{height:52px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);padding:0 14px;font-size:17px;width:100%;min-width:0}
+.prefixed{display:flex;align-items:center;height:52px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);padding:0 14px;gap:2px}
+.prefixed span{color:var(--muted);font-family:var(--mono)}
+.prefixed input{border:0;outline:0;background:transparent;flex:1;min-width:0;font-family:var(--mono);font-size:17px;letter-spacing:1px}
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper button{width:40px;height:40px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);font-size:20px;line-height:1}
+.stepper .n{min-width:28px;text-align:center;font-weight:700;font-size:17px}
+.photo{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;border:1.5px dashed var(--muted);background:var(--surface);text-align:left;width:100%}
+.thumb{width:64px;height:64px;border-radius:8px;background:var(--line);object-fit:cover;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted)}
+.scan{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:180px;border-radius:16px;background:var(--ink);color:var(--bg);text-align:center;padding:20px;border:0;width:100%}
+.scan svg{width:72px;height:72px}
+.scan b{font-size:19px}
+.scan span{font-size:13px;opacity:.8}
+.timeline{display:flex;flex-direction:column}
+.ev{display:grid;grid-template-columns:14px 1fr;gap:10px;padding-bottom:12px}
+.ev .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);margin-top:6px;position:relative}
+.ev:not(:last-child) .dot::after{content:"";position:absolute;left:4px;top:12px;width:2px;height:calc(100% + 40px);background:var(--line)}
+.ev .body{min-width:0}
+.ev .hash{font-family:var(--mono);font-size:11.5px;color:var(--muted);overflow-wrap:anywhere}
+.qrgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.qr{background:#FFFFFF;color:#111827;border-radius:10px;padding:10px;display:flex;flex-direction:column;align-items:center;gap:4px;border:1px solid var(--line)}
+.qr svg{width:100%;height:auto;max-width:180px}
+.qr .mono{font-size:15px;font-weight:500}
+.qr .tag{font-size:11px;color:#4B5563}
+.doc{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.doc h2{font-size:18px;text-align:center}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{background:var(--bg);font-weight:700;white-space:nowrap}
+td.mono{font-size:12px}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:6px 10px;font-size:14px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:12px 16px;border-radius:12px;font-size:14px;max-width:min(440px,calc(100% - 32px));z-index:20;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.list-h{display:flex;justify-content:space-between;align-items:baseline}
+.empty{color:var(--muted);font-size:14px;padding:14px 0}
+.cam{position:fixed;inset:0;z-index:30;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cam .frame{position:relative;width:min(70vw,280px);aspect-ratio:1;border:3px solid #FFFFFF;border-radius:18px;box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
+.cam .msg{position:absolute;left:16px;right:16px;top:calc(24px + env(safe-area-inset-top,0px));color:#FFFFFF;text-align:center;font-weight:700;font-size:17px}
+.cam .bar{position:absolute;left:16px;right:16px;bottom:calc(24px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cam .bar button,.cam .bar label{min-height:52px;border-radius:12px;border:0;background:rgba(255,255,255,.92);color:#111827;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <div class="top-row">
+      <span class="brand">증거물 연계</span>
+      <span class="who" id="whoLabel"></span>
+    </div>
+    <div class="seg" role="group" aria-label="시연 신분 선택" id="roleSeg"></div>
+  </div>
+</header>
+<main><div class="wrap" id="app"></div></main>
+<input type="file" id="scanFile" accept="image/*" capture="environment" class="vh" aria-label="QR 촬영">
+<input type="file" id="photoFile" accept="image/*" capture="environment" class="vh" aria-label="사진 촬영">
+<div class="toast" id="toast" role="status" hidden></div>
+<div class="cam" id="cam" hidden><video id="camVideo" playsinline muted></video><div class="frame" aria-hidden="true"></div><div class="msg" id="camMsg">QR을 네모 안에 맞추세요</div><div class="bar"><button type="button" id="camClose">닫기</button><label for="scanFile">사진으로 찍기</label></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* ---------- constants ---------- */
+var ROLES = {
+  police:   {key:'police',   label:'지역경찰', org:'서울청 방배서 남태령지구대', prefix:'서울100남'},
+  detective:{key:'detective',label:'형사',     org:'서울청 방배서 형사과',       prefix:'서울100형'},
+  forensic: {key:'forensic', label:'과학수사', org:'서울청 광역과학수사 6팀',    prefix:'서울광6'}
+};
+var CRIMES = ['절도','강도','살인','방화','사기','폭행','상해','성폭력','강추','주침','무취','교통','화재','변사','미상'];
+var PRESETS = ['담배꽁초','휴대폰','면봉','흉기','의류','현금','지갑','신발'];
+var EVLABEL = {register:'등록', seal:'봉인', handover:'인계', receive:'인수', damage:'손상 보고', link:'사건번호 연결'};
+var STATUS = {open:['봉인 전','warn'], sealed:['봉인됨',''], transit:['인계 중',''], damaged:['봉인 이상','bad']};
+
+/* ---------- small helpers ---------- */
+function $(s){return document.querySelector(s)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function lsGet(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n}
+function yymmdd(d){d=d||new Date();return pad(d.getFullYear()%100,2)+pad(d.getMonth()+1,2)+pad(d.getDate(),2)}
+function fmtTime(iso){var d=new Date(iso);return pad(d.getMonth()+1,2)+'.'+pad(d.getDate(),2)+' '+pad(d.getHours(),2)+':'+pad(d.getMinutes(),2)}
+function fmtFull(iso){var d=new Date(iso);return d.getFullYear()+'-'+pad(d.getMonth()+1,2)+'-'+pad(d.getDate(),2)+' '+pad(d.getHours(),2)+':'+pad(d.getMinutes(),2)+':'+pad(d.getSeconds(),2)}
+function clone(o){return JSON.parse(JSON.stringify(o))}
+var toastT;
+function toast(msg){var t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true},3200)}
+function totalQty(c){return (c||[]).reduce(function(a,r){return a+(r.qty||0)},0)}
+
+/* ---------- SHA-256 (WebCrypto, with a pure-JS fallback) ---------- */
+function hex(buf){var b=new Uint8Array(buf),s='';for(var i=0;i<b.length;i++)s+=(b[i]<16?'0':'')+b[i].toString(16);return s}
+function sha256js(bytes){
+  var K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  var H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  var l=bytes.length,bl=((l+9+63)>>6)<<6,m=new Uint8Array(bl);m.set(bytes);m[l]=0x80;
+  var bits=l*8;for(var i=0;i<8;i++){m[bl-1-i]=bits&0xff;bits=Math.floor(bits/256)}
+  var w=new Array(64);
+  function r(x,n){return (x>>>n)|(x<<(32-n))}
+  for(var o=0;o<bl;o+=64){
+    for(var t=0;t<16;t++)w[t]=(m[o+t*4]<<24)|(m[o+t*4+1]<<16)|(m[o+t*4+2]<<8)|m[o+t*4+3];
+    for(t=16;t<64;t++){var s0=r(w[t-15],7)^r(w[t-15],18)^(w[t-15]>>>3),s1=r(w[t-2],17)^r(w[t-2],19)^(w[t-2]>>>10);w[t]=(w[t-16]+s0+w[t-7]+s1)|0}
+    var a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+    for(t=0;t<64;t++){var S1=r(e,6)^r(e,11)^r(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[t]+w[t])|0,S0=r(a,2)^r(a,13)^r(a,22),mj=(a&b)^(a&c)^(b&c),t2=(S0+mj)|0;h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0}
+    H[0]=(H[0]+a)|0;H[1]=(H[1]+b)|0;H[2]=(H[2]+c)|0;H[3]=(H[3]+d)|0;H[4]=(H[4]+e)|0;H[5]=(H[5]+f)|0;H[6]=(H[6]+g)|0;H[7]=(H[7]+h)|0;
+  }
+  var out=new Uint8Array(32);for(i=0;i<8;i++){out[i*4]=H[i]>>>24;out[i*4+1]=(H[i]>>>16)&255;out[i*4+2]=(H[i]>>>8)&255;out[i*4+3]=H[i]&255}
+  return hex(out);
+}
+async function sha256Bytes(bytes){
+  try{if(window.crypto&&crypto.subtle){return hex(await crypto.subtle.digest('SHA-256',bytes))}}catch(e){}
+  return sha256js(new Uint8Array(bytes));
+}
+function sha256Text(s){return sha256Bytes(new TextEncoder().encode(s))}
+
+/* ---------- storage: shared db when available, memory otherwise ---------- */
+var db=null, dl=null;
+var mem=lsGet("coc.data",null)||{items:{},events:{},sites:[]};
+function persist(){try{localStorage.setItem("coc.data",JSON.stringify(mem))}catch(e){toast("폰 저장 공간이 부족합니다. 백업 후 초기화하세요.")}}
+var store={
+  getItem:async function(code){
+    if(db){var s=await db.doc('items/'+code).get();return s.exists?clone(s.data()):null}
+    return mem.items[code]?clone(mem.items[code]):null;
+  },
+  putItem:async function(it){
+    it.updatedAt=new Date().toISOString();
+    if(db){await db.doc('items/'+it.code).set(clone(it));return}
+    mem.items[it.code]=clone(it);persist();
+  },
+  listItems:async function(){
+    if(db){var q=await db.collection('items').get();return q.docs.map(function(d){return clone(d.data())})}
+    return Object.keys(mem.items).map(function(k){return clone(mem.items[k])});
+  },
+  listEvents:async function(code){
+    if(db){var q=await db.collection('chains/'+code+'/events').get();return q.docs.map(function(d){return clone(d.data())})}
+    return (mem.events[code]||[]).map(clone);
+  },
+  putEvent:async function(code,ev){
+    if(db){await db.doc('chains/'+code+'/events/'+pad(ev.seq,4)).set(ev);return}
+    (mem.events[code]=mem.events[code]||[]).push(clone(ev));persist();
+  },
+  countSites:async function(key){
+    if(db){var q=await db.collection('sites').where('key','==',key).get();return q.size}
+    return mem.sites.filter(function(s){return s.key===key}).length;
+  },
+  addSite:async function(s){
+    if(db){await db.collection('sites').add(s);return}
+    mem.sites.push(s);persist();
+  }
+};
+
+/* ---------- identity (per-viewer convenience) ---------- */
+var me = lsGet('coc.role','police');
+if(!ROLES[me]) me='police';
+function role(){return ROLES[me]}
+function actor(){return {role:me,label:role().label,org:role().org}}
+function renderTop(){
+  $('#whoLabel').textContent=role().org;
+  $('#roleSeg').innerHTML=Object.keys(ROLES).map(function(k){
+    return '<button type="button" data-role="'+k+'" aria-pressed="'+(k===me)+'">'+esc(ROLES[k].label)+'</button>';
+  }).join('');
+}
+function currentSite(){var s=lsGet('coc.site.'+me,null);return s&&s.date===yymmdd()?s:null}
+
+/* ---------- hash chain ---------- */
+async function appendEvent(code,type,data){
+  var evs=await store.listEvents(code);
+  var prev=evs.length?evs[evs.length-1].hash:'GENESIS';
+  var seq=evs.length+1;
+  var body=JSON.stringify({code:code,seq:seq,type:type,at:new Date().toISOString(),actor:actor(),data:data||{},prev:prev});
+  var hash=await sha256Text(body);
+  var ev={seq:seq,type:type,body:body,hash:hash};
+  await store.putEvent(code,ev);
+  return ev;
+}
+async function verify(evs){
+  var prev='GENESIS';
+  for(var i=0;i<evs.length;i++){
+    var e=evs[i],b;
+    try{b=JSON.parse(e.body)}catch(x){return {ok:false,at:i+1}}
+    var h=await sha256Text(e.body);
+    if(h!==e.hash||b.prev!==prev||b.seq!==i+1)return {ok:false,at:i+1};
+    prev=e.hash;
+  }
+  return {ok:true,count:evs.length,last:prev};
+}
+function parsed(e){try{return JSON.parse(e.body)}catch(x){return {}}}
+function lastOf(evs,type){for(var i=evs.length-1;i>=0;i--){if(evs[i].type===type)return parsed(evs[i])}return null}
+
+/* ---------- image helpers ---------- */
+function loadImage(file){
+  return new Promise(function(res,rej){
+    var url=URL.createObjectURL(file),img=new Image();
+    img.onload=function(){res({img:img,url:url})};
+    img.onerror=function(){URL.revokeObjectURL(url);rej(new Error('img'))};
+    img.src=url;
+  });
+}
+function drawScaled(img,max){
+  var s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+  var c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);
+  var x=c.getContext('2d');x.drawImage(img,0,0,c.width,c.height);return {c:c,x:x};
+}
+async function decodeQR(file){
+  var o=await loadImage(file);
+  try{
+    var sizes=[1200,800,1800];
+    for(var i=0;i<sizes.length;i++){
+      var d=drawScaled(o.img,sizes[i]);
+      var data=d.x.getImageData(0,0,d.c.width,d.c.height);
+      var r=window.jsQR?jsQR(data.data,data.width,data.height,{inversionAttempts:'attemptBoth'}):null;
+      if(r&&r.data)return r.data;
+    }
+    return null;
+  }finally{URL.revokeObjectURL(o.url)}
+}
+async function photoInfo(file){
+  var buf=await file.arrayBuffer();
+  var h=await sha256Bytes(buf);
+  var o=await loadImage(file);
+  var d=drawScaled(o.img,200);
+  URL.revokeObjectURL(o.url);
+  return {hash:h,thumb:d.c.toDataURL('image/jpeg',0.7)};
+}
+function normCode(t){
+  var m=String(t||'').match(/(\d{6})/);
+  return m?m[1]:null;
+}
+
+/* ---------- view state ---------- */
+var view={name:'home'};
+var app=$('#app');
+function go(v){view=v;render();window.scrollTo(0,0)}
+
+async function render(){
+  renderTop();
+  var fn=VIEWS[view.name]||VIEWS.home;
+  try{app.innerHTML=await fn(view)}catch(e){console.error(e);app.innerHTML='<div class="banner bad">화면을 불러오지 못했습니다. 다시 시도해 주세요.</div>'+backBtn()}
+}
+function backBtn(label){return '<button class="btn ghost" data-act="home" type="button">'+esc(label||'처음으로')+'</button>'}
+function statusPill(it){var s=STATUS[it.status]||['',''];return '<span class="pill '+s[1]+'">'+esc(s[0])+'</span>'}
+function kindLabel(it){return it.kind==='bundle'?'묶음':'봉투'}
+function contentsLine(c){if(!c||!c.length)return '내용물 없음';return c.map(function(r){return r.name+' '+r.qty}).join(', ')}
+function levelFor(c){
+  var hasLab=(c||[]).some(function(r){return (r.nature||[]).indexOf('감정')>=0});
+  var hasConf=(c||[]).some(function(r){return (r.nature||[]).indexOf('몰수')>=0});
+  if(hasLab)return {name:'봉인 확인',why:'감정물이 있어 열지 않고 봉인 상태만 확인합니다.'};
+  if(hasConf)return {name:'수량 확인',why:'몰수 대상은 같은 물건인지와 수량을 확인합니다.'};
+  return {name:'수량 확인',why:'목록과 수량을 확인합니다.'};
+}
+
+var VIEWS={};
+
+/* ---------- home ---------- */
+VIEWS.home=async function(){
+  var items=await store.listItems();
+  var incoming=items.filter(function(i){return i.status==='transit'&&i.to===me});
+  var mine=items.filter(function(i){return i.holder===me&&i.status!=='transit'});
+  var sending=items.filter(function(i){return i.holder===me&&i.status==='transit'});
+  var site=currentSite();
+  function list(arr,empty){
+    if(!arr.length)return '<p class="empty">'+esc(empty)+'</p>';
+    return '<div class="rows">'+arr.map(function(i){
+      return '<button type="button" class="row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;text-align:left" data-open="'+esc(i.code)+'"><span class="l"><b><span class="mono">'+esc(i.code)+'</span> · '+esc(kindLabel(i))+' '+totalQty(i.contents)+'점</b><span class="small">'+esc(i.site)+'</span></span>'+statusPill(i)+'</button>';
+    }).join('')+'</div>';
+  }
+  return ''+
+  '<button type="button" class="scan" data-act="liveScan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M7 12h10"/></svg><b>QR 촬영해서 스캔</b><span>카메라를 스티커에 비추면 다음 할 일이 나옵니다</span></button>'+
+  '<form class="btn-row" id="manualForm" style="grid-template-columns:1fr auto"><label for="codeInput" class="vh">QR 아래 번호</label><input class="input mono" id="codeInput" inputmode="numeric" maxlength="6" placeholder="번호 6자리 입력"><button class="btn outline" type="submit">열기</button></form>'+
+  (site?'<div class="banner info"><span>진행 중인 현장 <b>'+esc(site.site)+'</b></span></div>':'')+
+  (incoming.length?'<div class="list-h"><h2>인수 대기</h2><span class="pill warn">'+incoming.length+'</span></div>'+list(incoming,''):'')+
+  '<div class="list-h"><h2>내가 보관 중</h2><span class="small">'+mine.length+'건</span></div>'+list(mine,'아직 없습니다. 스티커를 찍어 첫 증거물을 등록하세요.')+
+  (sending.length?'<div class="list-h"><h2>인계 중</h2><span class="small">상대 인수 대기</span></div>'+list(sending,''):'')+
+  '<button class="btn" type="button" data-act="sheet">시연용 QR 스티커 보기</button>'+
+  '<div class="card"><h2>시연 순서</h2><ol class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">'+
+  '<li>다른 화면(PC 등)에 시연용 QR 스티커를 띄우거나 인쇄합니다.</li><li>지역경찰로 촬영 → 등록 → 내용물 → 봉인 사진 → 봉인 완료.</li><li>인계하기에서 받는 사람(형사)을 고릅니다.</li><li>위에서 신분을 형사로 바꾸고 같은 QR을 찍어 인수합니다.</li><li>사건번호 연결, 연계확인서, 위변조 시험을 확인합니다.</li></ol>'+
+  '</div>'+
+  '<div class="card"><h2>이 폰의 기록</h2><p class="small" style="margin:0">기록은 이 폰 안에만 저장됩니다. 시연용 가짜 데이터만 쓰세요.</p>'+
+  '<div class="btn-row"><button class="btn" type="button" data-act="backup">백업 내보내기</button><button class="btn" type="button" data-act="resetAsk">기록 지우기</button></div>'+
+  (view.resetAsk?'<div class="banner bad" style="flex-direction:column"><span>모든 시연 기록을 지웁니다. 되돌릴 수 없습니다.</span><div class="btn-row" style="width:100%"><button class="btn" type="button" data-act="home">취소</button><button class="btn warn" type="button" data-act="reset">지우기</button></div></div>':'')+'</div>';
+};
+
+/* ---------- QR sheet ---------- */
+VIEWS.sheet=async function(v){
+  var start=v.start||501;
+  var items=await store.listItems();
+  var used={};items.forEach(function(i){used[i.code]=1});
+  var cells='';
+  for(var n=start;n<start+12;n++){
+    var code=pad(n,6),svg='';
+    try{var q=qrcode(0,'M');q.addData('COC:'+code);q.make();svg=q.createSvgTag({cellSize:4,margin:2,scalable:true})}catch(e){svg='<div class="small">QR 생성 실패</div>'}
+    cells+='<div class="qr">'+svg+'<span class="mono">'+code+'</span><span class="tag">'+(used[code]?'등록됨':'미사용')+'</span></div>';
+  }
+  return '<p class="eyebrow">시연용 스티커 · QR에는 고유번호만 들어 있습니다</p><h1>QR 스티커 '+pad(start,6)+'–'+pad(start+11,6)+'</h1>'+
+  '<p class="small" style="margin:0">이 화면을 다른 기기에 띄우거나 인쇄해서, 휴대폰으로 촬영하세요.</p>'+
+  '<div class="qrgrid">'+cells+'</div>'+
+  '<div class="btn-row"><button class="btn" type="button" data-sheet="'+Math.max(1,start-12)+'"'+(start<=1?' disabled':'')+'>이전 12개</button><button class="btn" type="button" data-sheet="'+(start+12)+'">다음 12개</button></div>'+backBtn();
+};
+
+/* ---------- register ---------- */
+VIEWS.register=async function(v){
+  var site=currentSite();
+  if(v.newSite===undefined)v.newSite=!site;
+  v.kind=v.kind||'bag';v.crime=v.crime||'절도';
+  var siteBlock=site&&!v.newSite
+    ?'<div class="card"><div class="row" style="padding:0;border:0"><span class="l"><span class="small">현장번호 · 이어서 등록</span><b style="font-size:17px">'+esc(site.site)+'</b><span class="small">'+esc(role().org)+'</span></span><button class="btn ghost" type="button" data-act="newsite">새 현장</button></div></div>'
+    :'<div class="field"><label>죄종</label><div class="chips">'+CRIMES.map(function(c){return '<button type="button" class="chip sm" data-crime="'+esc(c)+'" aria-pressed="'+(c===v.crime)+'">'+esc(c)+'</button>'}).join('')+'</div></div>'+
+     '<div class="card"><span class="small">새 현장번호 · 자동 부여</span><b style="font-size:17px">'+esc(role().prefix+v.crime)+' '+yymmdd()+'-<span class="small">순번</span></b><span class="small">'+esc(role().org)+' · '+esc(v.crime)+'</span>'+(site?'<button class="btn ghost" type="button" data-act="keepsite" style="justify-content:flex-start;padding:0">진행 중인 현장으로 돌아가기</button>':'')+'</div>';
+  return '<p class="eyebrow">처음 보는 스티커</p><h1>QR <span class="mono">'+esc(v.code)+'</span> 등록</h1>'+
+  '<div class="field"><label>무엇에 붙였나요?</label><div class="btn-row">'+
+  '<button type="button" class="chip" style="min-height:64px" data-kind="bag" aria-pressed="'+(v.kind==='bag')+'">봉투<br><span class="small">여러 증거물을 담는 포장</span></button>'+
+  '<button type="button" class="chip" style="min-height:64px" data-kind="bundle" aria-pressed="'+(v.kind==='bundle')+'">묶음<br><span class="small">같은 종류 다량</span></button></div></div>'+
+  siteBlock+
+  '<div class="field"><label for="r112">112 접수번호 <span class="small" style="font-weight:400">(있으면 입력)</span></label><input class="input mono" id="r112" inputmode="numeric" placeholder="선택 입력" value="'+esc(v.r112||'')+'"></div>'+
+  '<button class="btn primary" type="button" data-act="doRegister">등록하고 내용물 입력</button>'+backBtn('취소');
+};
+
+/* ---------- contents & seal ---------- */
+VIEWS.contents=async function(v){
+  var it=v.item||(v.item=await store.getItem(v.code));
+  v.rows=v.rows||clone(it.contents||[]);
+  var n=totalQty(v.rows);
+  var rows=v.rows.length?'<div class="rows">'+v.rows.map(function(r,i){
+    var nat=r.nature||[];
+    return '<div class="row" style="flex-wrap:wrap"><span class="l"><b>'+esc(r.name)+'</b><span class="small">'+esc(it.code)+'-'+(i+1)+'</span></span>'+
+    '<div class="stepper"><button type="button" aria-label="'+esc(r.name)+' 줄이기" data-dec="'+i+'">−</button><span class="n">'+r.qty+'</span><button type="button" aria-label="'+esc(r.name)+' 늘리기" data-inc="'+i+'">+</button></div>'+
+    '<div class="chips" style="width:100%"><button type="button" class="chip sm" data-nat="'+i+'|감정" aria-pressed="'+(nat.indexOf('감정')>=0)+'">감정물</button><button type="button" class="chip sm" data-nat="'+i+'|몰수" aria-pressed="'+(nat.indexOf('몰수')>=0)+'">몰수 대상</button></div></div>';
+  }).join('')+'</div>':'<p class="empty">아래 버튼으로 품목을 추가하세요.</p>';
+  return '<p class="eyebrow">'+esc(kindLabel(it))+' <span class="mono">'+esc(it.code)+'</span> · '+esc(it.site)+'</p><h1>무엇을 담았나요?</h1>'+
+  '<p class="small" style="margin:0">일시·작성자·소속은 자동으로 기록됩니다.</p>'+
+  '<div class="chips">'+PRESETS.map(function(p){return '<button type="button" class="chip" data-add="'+esc(p)+'">'+esc(p)+'</button>'}).join('')+'</div>'+
+  '<form class="btn-row" id="customForm" style="grid-template-columns:1fr auto"><label for="customName" class="vh">직접 입력</label><input class="input" id="customName" placeholder="직접 입력"><button class="btn" type="submit">추가</button></form>'+
+  rows+
+  '<label class="photo" for="photoFile" data-photo="seal">'+(v.photo?'<img class="thumb" alt="봉인 전 사진" src="'+v.photo.thumb+'">':'<span class="thumb">사진</span>')+
+  '<span style="display:flex;flex-direction:column;gap:2px"><b>봉인 전 내용물 사진</b><span class="small" style="color:'+(v.photo?'var(--good)':'var(--warn)')+'">'+(v.photo?'촬영됨 · 해시 '+v.photo.hash.slice(0,12):'필수 · 눌러서 촬영')+'</span></span></label>'+
+  '<button class="btn primary" type="button" data-act="doSeal"'+(n&&v.photo?'':' disabled')+'>봉인 완료 · '+n+'점</button>'+backBtn('나중에 하기');
+};
+
+/* ---------- detail ---------- */
+VIEWS.detail=async function(v){
+  var it=await store.getItem(v.code);
+  if(!it)return '<div class="banner bad">등록되지 않은 QR입니다.</div>'+backBtn();
+  var evs=await store.listEvents(it.code);
+  var ver=await verify(evs);
+  var isHolder=it.holder===me;
+  var caseHtml=(it.kics||it.scas)
+    ?'<div class="card" style="flex-direction:row;justify-content:space-between;align-items:center"><span class="l" style="display:flex;flex-direction:column"><span class="small">사건번호</span><b class="mono">'+(it.kics?'KICS '+esc(it.kics):'')+(it.kics&&it.scas?'<br>':'')+(it.scas?'SCAS '+esc(it.scas):'')+'</b></span><button class="btn ghost" type="button" data-act="link">수정</button></div>'
+    :'<div class="banner warn" style="justify-content:space-between;align-items:center"><span>사건번호 미연결</span><button class="btn ghost" type="button" data-act="link" style="color:var(--warn);font-weight:700;min-height:40px">연결하기</button></div>';
+  var tl=evs.slice().reverse().map(function(e){var b=parsed(e);
+    var extra='';
+    if(e.type==='handover')extra=' → '+esc((ROLES[b.data.to]||{}).label||'');
+    if(e.type==='seal')extra=' · '+totalQty(b.data.contents)+'점';
+    if(e.type==='damage')extra=' · '+esc(b.data.type||'');
+    if(e.type==='link')extra=' · '+esc([b.data.kics&&'KICS '+b.data.kics,b.data.scas&&'SCAS '+b.data.scas].filter(Boolean).join(', '));
+    if(e.type==='receive')extra=' · '+esc(b.data.level||'');
+    return '<div class="ev"><span class="dot"></span><div class="body"><b>'+esc(EVLABEL[e.type]||e.type)+extra+'</b><div class="small">'+fmtTime(b.at)+' · '+esc(b.actor?b.actor.label+' ('+b.actor.org+')':'')+'</div><div class="hash">#'+e.seq+' '+esc(e.hash.slice(0,16))+'…</div></div></div>';
+  }).join('');
+  var holderTxt=it.status==='transit'?'인계 중 → '+(ROLES[it.to]||{}).label:'보관: '+(ROLES[it.holder]||{}).label;
+  var actions='';
+  if(isHolder&&(it.status==='sealed'||it.status==='damaged')){
+    actions='<button class="btn primary" type="button" data-act="handover">인계하기</button>'+
+    '<div class="btn-row"><button class="btn" type="button" data-act="cert">연계확인서</button><button class="btn" type="button" data-act="damage">손상 보고</button></div>';
+  }else if(isHolder&&it.status==='open'){
+    actions='<button class="btn primary" type="button" data-act="contents">내용물 입력 · 봉인</button>';
+  }else if(it.status==='transit'&&it.to===me){
+    actions='<button class="btn primary" type="button" data-act="receive">인수 확인하기</button><button class="btn" type="button" data-act="cert">연계확인서</button>';
+  }else{
+    actions='<button class="btn" type="button" data-act="cert">연계확인서</button>';
+  }
+  return '<p class="eyebrow">'+esc(it.site)+'</p>'+
+  '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><h1>'+esc(kindLabel(it))+' <span class="mono">'+esc(it.code)+'</span></h1>'+statusPill(it)+'</div>'+
+  '<p class="small" style="margin:0">'+esc(holderTxt)+'</p>'+
+  (it.status==='damaged'&&it.damage?'<div class="banner bad">봉인 이상: '+esc(it.damage.type)+' · 내용물 '+(it.damage.contentsOk?'이상 없음':'이상 있음')+'</div>':'')+
+  caseHtml+
+  '<div class="card" style="flex-direction:row;align-items:center;gap:12px">'+(it.sealThumb?'<img class="thumb" alt="봉인 전 사진" src="'+it.sealThumb+'">':'<span class="thumb">사진 없음</span>')+
+  '<span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b>내용물 '+totalQty(it.contents)+'점</b><span class="small" style="overflow-wrap:anywhere">'+esc(contentsLine(it.contents))+'</span></span></div>'+
+  (ver.ok?'<div class="banner good">무결성 확인 · 기록 '+ver.count+'건 모두 일치</div>':'<div class="banner bad">무결성 불일치 · '+ver.at+'번째 기록부터 맞지 않습니다</div>')+
+  actions+
+  '<div class="card"><h2>이력</h2><div class="timeline">'+(tl||'<p class="empty">기록 없음</p>')+'</div></div>'+backBtn();
+};
+
+/* ---------- handover ---------- */
+VIEWS.handover=async function(v){
+  var it=await store.getItem(v.code);
+  var others=Object.keys(ROLES).filter(function(k){return k!==me});
+  v.to=v.to||others[0];
+  return '<p class="eyebrow">'+esc(kindLabel(it))+' <span class="mono">'+esc(it.code)+'</span> · '+totalQty(it.contents)+'점</p><h1>누구에게 넘기나요?</h1>'+
+  '<div style="display:flex;flex-direction:column;gap:8px">'+others.map(function(k){return '<button type="button" class="chip" style="min-height:64px;text-align:left" data-to="'+k+'" aria-pressed="'+(v.to===k)+'"><b>'+esc(ROLES[k].label)+'</b><br><span class="small">'+esc(ROLES[k].org)+'</span></button>'}).join('')+'</div>'+
+  '<div class="banner info">상대가 같은 QR을 찍고 인수를 확인해야 인계가 끝납니다.</div>'+
+  '<button class="btn primary" type="button" data-act="doHandover">인계 · '+esc(ROLES[v.to].label)+'에게</button>'+
+  '<button class="btn ghost" type="button" data-act="back">취소</button>';
+};
+
+/* ---------- receive ---------- */
+VIEWS.receive=async function(v){
+  var it=await store.getItem(v.code);
+  var evs=await store.listEvents(it.code);
+  var ver=await verify(evs);
+  var seal=lastOf(evs,'seal');
+  var ho=lastOf(evs,'handover');
+  var nowHash=await sha256Text(JSON.stringify(it.contents||[]));
+  var listOk=seal&&seal.data.contentsHash===nowHash;
+  var lv=levelFor(it.contents);
+  var damaged=it.status==='damaged'||!!it.damage;
+  var canGo=ver.ok&&(!damaged||v.ack);
+  return '<p class="eyebrow">넘겨받는 '+esc(kindLabel(it))+'</p><h1><span class="mono">'+esc(it.code)+'</span> 인수</h1>'+
+  '<div class="card" style="flex-direction:row;justify-content:space-between;align-items:center;gap:8px"><span style="display:flex;flex-direction:column"><span class="small">인계자</span><b>'+esc(ho?ho.actor.label:'')+'</b><span class="small">'+esc(ho?ho.actor.org:'')+'</span></span><span aria-hidden="true">→</span><span style="display:flex;flex-direction:column;text-align:right"><span class="small">인수자</span><b>'+esc(role().label)+' (나)</b></span></div>'+
+  '<div class="rows">'+
+  '<div class="row"><span>내용물 목록</span><b style="color:'+(listOk?'var(--good)':'var(--bad)')+'">'+(listOk?totalQty(it.contents)+' / '+totalQty(seal.data.contents)+' 일치':'불일치')+'</b></div>'+
+  '<div class="row"><span>봉인 상태</span><b style="color:'+(damaged?'var(--bad)':'var(--good)')+'">'+(damaged?'봉인 이상':'이상 없음')+'</b></div>'+
+  '<div class="row"><span>무결성</span><b style="color:'+(ver.ok?'var(--good)':'var(--bad)')+'">'+(ver.ok?'확인됨 · '+ver.count+'건':'불일치')+'</b></div></div>'+
+  '<div class="card"><span class="small">확인 수준</span><b>'+esc(lv.name)+'</b><span class="small">'+esc(lv.why)+'</span></div>'+
+  '<div class="card" style="flex-direction:row;align-items:center;gap:12px">'+(it.sealThumb?'<img class="thumb" style="width:88px;height:88px" alt="봉인 전 사진" src="'+it.sealThumb+'">':'<span class="thumb">사진 없음</span>')+'<span class="small">봉인 전 사진과 실물을 대조한 뒤 인수를 확인하세요. 내용물: '+esc(contentsLine(it.contents))+'</span></div>'+
+  (damaged?'<label class="banner bad" style="cursor:pointer"><input type="checkbox" id="ackDamage"'+(v.ack?' checked':'')+' style="width:22px;height:22px;margin:0;flex-shrink:0"><span>봉인 이상('+esc(it.damage?it.damage.type:'')+')을 확인했습니다</span></label>':'')+
+  '<button class="btn primary" type="button" data-act="doReceive"'+(canGo?'':' disabled')+'>인수 확인</button>'+
+  '<button class="btn warn" type="button" data-act="damage">이상 있음 보고</button>'+backBtn('나중에');
+};
+
+/* ---------- damage ---------- */
+VIEWS.damage=async function(v){
+  var it=await store.getItem(v.code);
+  v.dtype=v.dtype||'찢김';
+  if(v.ok===undefined)v.ok=true;
+  return '<p class="eyebrow">'+esc(kindLabel(it))+' <span class="mono">'+esc(it.code)+'</span></p><h1>손상 보고</h1>'+
+  '<div class="field"><label>어떤 손상인가요?</label><div class="btn-row">'+['찢김','젖음','봉인 훼손','오염'].map(function(t){return '<button type="button" class="chip" data-dtype="'+t+'" aria-pressed="'+(v.dtype===t)+'">'+t+'</button>'}).join('')+'</div></div>'+
+  '<label class="photo" for="photoFile" data-photo="damage">'+(v.photo?'<img class="thumb" alt="손상 부위 사진" src="'+v.photo.thumb+'">':'<span class="thumb">사진</span>')+
+  '<span style="display:flex;flex-direction:column;gap:2px"><b>손상 부위 사진</b><span class="small" style="color:'+(v.photo?'var(--good)':'var(--warn)')+'">'+(v.photo?'촬영됨':'필수 · 눌러서 촬영')+'</span></span></label>'+
+  '<div class="field"><label>내용물에 이상이 있나요?</label><div class="btn-row"><button type="button" class="chip" data-ok="1" aria-pressed="'+(v.ok===true)+'">이상 없음 · '+totalQty(it.contents)+'점</button><button type="button" class="chip" data-ok="0" aria-pressed="'+(v.ok===false)+'">이상 있음</button></div></div>'+
+  '<p class="small" style="margin:0">보고하면 \'봉인 이상\'으로 표시되고, 다음 인수자는 이 내용을 확인해야 인수할 수 있습니다.</p>'+
+  '<button class="btn warn" type="button" data-act="doDamage"'+(v.photo?'':' disabled')+'>손상 보고하기</button>'+
+  '<button class="btn ghost" type="button" data-act="back">취소</button>';
+};
+
+/* ---------- case number link ---------- */
+VIEWS.link=async function(v){
+  var it=await store.getItem(v.code);
+  var all=await store.listItems();
+  var same=all.filter(function(i){return i.site===it.site});
+  if(!v.sel){v.sel={};same.forEach(function(i){v.sel[i.code]=true})}
+  var yr=new Date().getFullYear();
+  var n=same.filter(function(i){return v.sel[i.code]}).length;
+  return '<p class="eyebrow">'+esc(role().org)+'</p><h1>'+esc(it.site)+'</h1>'+
+  '<div class="field"><div class="list-h"><label>사건번호</label><span class="small">있는 것만 입력</span></div>'+
+  '<div style="display:grid;grid-template-columns:56px 1fr;gap:8px;align-items:center"><label for="kics" style="font-weight:700">KICS</label><div class="prefixed"><span>'+yr+'-</span><input id="kics" inputmode="numeric" maxlength="6" placeholder="000000" value="'+esc(v.kics||'')+'"></div>'+
+  '<label for="scas" style="font-weight:700">SCAS</label><div class="prefixed"><span>'+yr+'-</span><input id="scas" inputmode="numeric" maxlength="5" placeholder="00000" value="'+esc(v.scas||'')+'"></div></div></div>'+
+  '<div class="rows"><div class="row"><b>이 현장의 '+same.length+'건</b><span class="small">사건이 나뉘면 체크 해제</span></div>'+
+  same.map(function(i){return '<label class="row" style="justify-content:flex-start;cursor:pointer"><input type="checkbox" data-sel="'+esc(i.code)+'"'+(v.sel[i.code]?' checked':'')+' style="width:22px;height:22px;margin:0;accent-color:var(--accent)"><span class="l" style="flex:1"><b>'+esc(kindLabel(i))+' <span class="mono">'+esc(i.code)+'</span></b><span class="small">'+esc(contentsLine(i.contents))+'</span></span><span class="small">'+totalQty(i.contents)+'점</span></label>'}).join('')+'</div>'+
+  '<p class="small" style="margin:0">연결한 사람과 시각은 각 이력에 남습니다.</p>'+
+  '<button class="btn primary" type="button" data-act="doLink"'+(n?'':' disabled')+'>'+n+'건에 연결</button>'+
+  '<button class="btn ghost" type="button" data-act="back">취소</button>';
+};
+
+/* ---------- certificate ---------- */
+VIEWS.cert=async function(v){
+  var it=await store.getItem(v.code);
+  var evs=await store.listEvents(it.code);
+  if(v.tamper&&evs.length>1){
+    var b=JSON.parse(evs[0].body);
+    b.at=new Date(new Date(b.at).getTime()+3600000).toISOString();
+    evs[0].body=JSON.stringify(b);
+  }
+  var ver=await verify(evs);
+  v.html=certFile(it,evs,ver);
+  var rows=evs.map(function(e){var b=parsed(e);return '<tr><td>'+e.seq+'</td><td class="mono" style="white-space:nowrap">'+esc(fmtTime(b.at))+'</td><td>'+esc(EVLABEL[e.type]||e.type)+'</td><td>'+esc(b.actor?b.actor.label:'')+'</td><td class="mono">'+esc(e.hash.slice(0,8))+'</td></tr>'}).join('');
+  return '<div class="doc"><h2>증거물 연계확인서</h2>'+
+  '<dl class="kv"><dt>식별 QR</dt><dd class="mono">'+esc(it.code)+' ('+esc(kindLabel(it))+')</dd><dt>현장번호</dt><dd>'+esc(it.site)+'</dd><dt>사건번호</dt><dd class="mono">'+esc([it.kics&&'KICS '+it.kics,it.scas&&'SCAS '+it.scas].filter(Boolean).join(' / ')||'미연결')+'</dd><dt>내용물</dt><dd>'+esc(contentsLine(it.contents))+'</dd><dt>현재 상태</dt><dd>'+esc((STATUS[it.status]||[''])[0])+'</dd></dl>'+
+  '<div class="tbl-wrap"><table><thead><tr><th>순번</th><th>일시</th><th>구분</th><th>담당</th><th>해시</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+  (ver.ok?'<div class="banner good">해시 체인 검증 통과 · '+ver.count+'건</div><div><span class="small">최종 해시 (SHA-256)</span><div class="mono" style="font-size:12px;overflow-wrap:anywhere">'+esc(ver.last)+'</div></div>'
+         :'<div class="banner bad">'+ver.at+'번째 기록부터 해시가 맞지 않습니다. 기록이 바뀐 것입니다.</div>')+
+  '</div>'+
+  (v.tamper?'<div class="banner warn">위변조 시험 중: 1번 기록의 시각을 1시간 바꾼 사본을 검증했습니다. 저장된 원본은 그대로입니다.</div><button class="btn" type="button" data-act="untamper">원래 기록으로 검증</button>'
+           :'<button class="btn" type="button" data-act="tamper"'+(evs.length>1?'':' disabled')+'>위변조 시험</button>')+
+  '<button class="btn outline" type="button" data-act="saveCert">연계확인서 파일로 저장·공유</button>'+
+  '<button class="btn ghost" type="button" data-act="back">돌아가기</button>';
+};
+function certFile(it,evs,ver){
+  var rows=evs.map(function(e){var b=parsed(e);return '<tr><td>'+e.seq+'</td><td>'+esc(fmtFull(b.at))+'</td><td>'+esc(EVLABEL[e.type]||e.type)+'</td><td>'+esc(b.actor?b.actor.label+' · '+b.actor.org:'')+'</td><td style="font-family:monospace;font-size:11px;word-break:break-all">'+esc(e.hash)+'</td></tr>'}).join('');
+  var raw=evs.map(function(e){return '<li style="font-family:monospace;font-size:11px;word-break:break-all">#'+e.seq+' '+esc(e.body)+'</li>'}).join('');
+  return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>연계확인서 '+esc(it.code)+'</title></head><body style="font-family:sans-serif;max-width:800px;margin:24px auto;padding:0 16px">'+
+  '<h1 style="text-align:center">증거물 연계확인서</h1><p>식별 QR: '+esc(it.code)+' / 현장번호: '+esc(it.site)+' / 사건번호: '+esc([it.kics&&'KICS '+it.kics,it.scas&&'SCAS '+it.scas].filter(Boolean).join(', ')||'미연결')+'</p><p>내용물: '+esc(contentsLine(it.contents))+'</p>'+
+  '<table border="1" cellpadding="6" style="border-collapse:collapse;width:100%"><tr><th>순번</th><th>일시</th><th>구분</th><th>담당</th><th>SHA-256</th></tr>'+rows+'</table>'+
+  '<p>검증 결과: '+(ver.ok?'통과 ('+ver.count+'건)':'불일치 ('+ver.at+'번째 기록부터)')+'</p><p>최종 해시: <code>'+esc(ver.last||'')+'</code></p>'+
+  '<h2>원본 기록 (재계산용)</h2><p>각 줄의 내용을 SHA-256으로 계산하면 위 표의 해시와 같아야 합니다.</p><ol>'+raw+'</ol>'+
+  '<p style="color:#666">출력: '+esc(fmtFull(new Date().toISOString()))+' · 시연용</p></body></html>';
+}
+
+/* ---------- actions ---------- */
+async function openCode(raw){
+  var code=normCode(raw);
+  if(!code){toast('6자리 번호를 찾지 못했습니다. QR 아래 번호를 확인하세요.');return}
+  var it=await store.getItem(code);
+  if(!it)return go({name:'register',code:code});
+  if(it.status==='transit'&&it.to===me)return go({name:'receive',code:code});
+  if(it.status==='open'&&it.holder===me)return go({name:'contents',code:code});
+  go({name:'detail',code:code});
+}
+var busy=false;
+async function guard(fn){if(busy)return;busy=true;try{await fn()}catch(e){console.error(e);toast('저장하지 못했습니다. 잠시 후 다시 시도하세요.')}finally{busy=false}}
+
+document.addEventListener('click',function(e){
+  var t=e.target.closest('button,[data-open]');
+  if(!t)return;
+  var d=t.dataset;
+  if(d.role){me=d.role;lsSet('coc.role',me);toast(ROLES[me].label+'(으)로 바꿨습니다');if(view.name==='home'||view.name==='sheet')render();else go({name:'home'});return}
+  if(d.open){openCode(d.open);return}
+  if(d.sheet){go({name:'sheet',start:+d.sheet});return}
+  if(d.kind){view.kind=d.kind;render();return}
+  if(d.crime){view.crime=d.crime;render();return}
+  if(d.add){var rs=view.rows,f=rs.filter(function(r){return r.name===d.add})[0];if(f)f.qty++;else rs.push({name:d.add,qty:1,nature:[]});render();return}
+  if(d.inc!==undefined){view.rows[+d.inc].qty++;render();return}
+  if(d.dec!==undefined){var r=view.rows[+d.dec];r.qty--;if(r.qty<=0)view.rows.splice(+d.dec,1);render();return}
+  if(d.nat){var p=d.nat.split('|'),row=view.rows[+p[0]],a=row.nature=row.nature||[],ix=a.indexOf(p[1]);if(ix>=0)a.splice(ix,1);else a.push(p[1]);render();return}
+  if(d.to){view.to=d.to;render();return}
+  if(d.dtype){view.dtype=d.dtype;render();return}
+  if(d.ok!==undefined){view.ok=d.ok==='1';render();return}
+  var act=d.act;if(!act)return;
+  var A={
+    home:function(){go({name:'home'})},
+    sheet:function(){go({name:'sheet',start:501})},
+    back:function(){go(view.from||{name:'detail',code:view.code})},
+    newsite:function(){view.newSite=true;render()},
+    keepsite:function(){view.newSite=false;render()},
+    contents:function(){go({name:'contents',code:view.code})},
+    handover:function(){go({name:'handover',code:view.code})},
+    receive:function(){go({name:'receive',code:view.code})},
+    link:function(){go({name:'link',code:view.code,from:{name:view.name,code:view.code}})},
+    cert:function(){go({name:'cert',code:view.code,from:{name:view.name,code:view.code}})},
+    damage:function(){go({name:'damage',code:view.code,from:{name:view.name,code:view.code}})},
+    tamper:function(){view.tamper=true;render()},
+    untamper:function(){view.tamper=false;render()},
+    doRegister:function(){guard(async function(){
+      var v=view,site=currentSite(),r112=($('#r112')||{}).value||'';
+      if(v.newSite||!site){
+        var key=role().prefix+v.crime+yymmdd();
+        var n=(await store.countSites(key))+1;
+        site={site:role().prefix+v.crime+' '+yymmdd()+'-'+n,crime:v.crime,date:yymmdd()};
+        await store.addSite({key:key,site:site.site,role:me,at:new Date().toISOString()});
+        lsSet('coc.site.'+me,site);
+      }
+      var it={code:v.code,kind:v.kind,site:site.site,crime:site.crime,report112:r112.trim(),holder:me,status:'open',to:null,contents:[],kics:'',scas:'',createdAt:new Date().toISOString()};
+      await store.putItem(it);
+      await appendEvent(v.code,'register',{kind:v.kind,site:site.site,report112:it.report112});
+      toast('등록했습니다 · '+site.site);
+      go({name:'contents',code:v.code});
+    })},
+    doSeal:function(){guard(async function(){
+      var v=view,it=await store.getItem(v.code);
+      var contents=v.rows.map(function(r){return {name:r.name,qty:r.qty,nature:(r.nature||[]).slice()}});
+      var ch=await sha256Text(JSON.stringify(contents));
+      await appendEvent(v.code,'seal',{contents:contents,contentsHash:ch,photoHash:v.photo.hash});
+      it.contents=contents;it.status='sealed';it.sealThumb=v.photo.thumb;
+      await store.putItem(it);
+      toast('봉인했습니다 · '+totalQty(contents)+'점');
+      go({name:'detail',code:v.code});
+    })},
+    doHandover:function(){guard(async function(){
+      var v=view,it=await store.getItem(v.code);
+      await appendEvent(v.code,'handover',{to:v.to,contentsCount:totalQty(it.contents)});
+      it.status='transit';it.to=v.to;await store.putItem(it);
+      toast(ROLES[v.to].label+'에게 인계했습니다. 상대가 인수하면 끝납니다.');
+      go({name:'detail',code:v.code});
+    })},
+    doReceive:function(){guard(async function(){
+      var v=view,it=await store.getItem(v.code),lv=levelFor(it.contents);
+      await appendEvent(v.code,'receive',{level:lv.name,damageAck:!!it.damage});
+      it.holder=me;it.to=null;it.status=it.damage?'damaged':'sealed';await store.putItem(it);
+      toast('인수했습니다');
+      go({name:'detail',code:v.code});
+    })},
+    doDamage:function(){guard(async function(){
+      var v=view,it=await store.getItem(v.code);
+      await appendEvent(v.code,'damage',{type:v.dtype,contentsOk:v.ok,photoHash:v.photo.hash});
+      it.damage={type:v.dtype,contentsOk:v.ok};
+      if(it.status!=='transit')it.status='damaged';
+      await store.putItem(it);
+      toast('손상을 보고했습니다');
+      go(v.from&&v.from.name==='receive'?{name:'receive',code:v.code}:{name:'detail',code:v.code});
+    })},
+    doLink:function(){guard(async function(){
+      var v=view,k=($('#kics').value||'').replace(/\D/g,''),s=($('#scas').value||'').replace(/\D/g,''),yr=new Date().getFullYear();
+      if(k&&k.length!==6){toast('KICS 번호는 6자리입니다');return}
+      if(s&&s.length!==5){toast('SCAS 번호는 5자리입니다');return}
+      if(!k&&!s){toast('KICS나 SCAS 중 하나는 입력하세요');return}
+      var kics=k?yr+'-'+k:'',scas=s?yr+'-'+s:'';
+      var codes=Object.keys(v.sel).filter(function(c){return v.sel[c]});
+      for(var i=0;i<codes.length;i++){
+        var it=await store.getItem(codes[i]);
+        await appendEvent(codes[i],'link',{kics:kics,scas:scas});
+        if(kics)it.kics=kics;if(scas)it.scas=scas;await store.putItem(it);
+      }
+      toast(codes.length+'건에 사건번호를 연결했습니다');
+      go({name:'detail',code:v.code});
+    })},
+    saveCert:function(){guard(async function(){
+      await shareFile('연계확인서_'+view.code+'.html',view.html,'text/html');
+    })},
+    liveScan:function(){startScan()},
+    backup:function(){guard(async function(){await shareFile('증거물연계_백업_'+yymmdd()+'.json',JSON.stringify(mem,null,1),'application/json')})},
+    resetAsk:function(){view.resetAsk=true;render()},
+    reset:function(){mem={items:{},events:{},sites:[]};persist();Object.keys(ROLES).forEach(function(k){try{localStorage.removeItem('coc.site.'+k)}catch(e){}});toast('기록을 지웠습니다');go({name:'home'})}
+  };
+  if(A[act])A[act]();
+});
+
+document.addEventListener('submit',function(e){
+  e.preventDefault();
+  if(e.target.id==='manualForm'){openCode($('#codeInput').value)}
+  if(e.target.id==='customForm'){var n=$('#customName').value.trim();if(!n)return;var rs=view.rows,f=rs.filter(function(r){return r.name===n})[0];if(f)f.qty++;else rs.push({name:n,qty:1,nature:[]});render()}
+});
+document.addEventListener('change',function(e){
+  var t=e.target;
+  if(t.id==='ackDamage'){view.ack=t.checked;render();return}
+  if(t.dataset&&t.dataset.sel){view.sel[t.dataset.sel]=t.checked;view.kics=$('#kics').value;view.scas=$('#scas').value;render();return}
+});
+$('#scanFile').addEventListener('change',async function(){
+  var f=this.files&&this.files[0];this.value='';if(!f)return;
+  toast('QR 읽는 중…');
+  try{var txt=await decodeQR(f);if(!txt){toast('QR을 찾지 못했습니다. 조금 더 가까이, 밝은 곳에서 찍어 주세요.');return}openCode(txt)}
+  catch(e){toast('사진을 읽지 못했습니다. 다시 찍어 주세요.')}
+});
+$('#photoFile').addEventListener('change',async function(){
+  var f=this.files&&this.files[0];this.value='';if(!f)return;
+  try{view.photo=await photoInfo(f);render()}catch(e){toast('사진을 읽지 못했습니다.')}
+});
+
+/* ---------- boot ---------- */
+async function shareFile(name,text,type){
+  var blob=new Blob([text],{type:type});
+  try{
+    var file=new File([blob],name,{type:type});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:name});return}
+  }catch(e){if(e&&e.name==='AbortError')return}
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},2000);
+}
+
+/* live camera scanner */
+var camStream=null,camRaf=0,camCanvas=document.createElement('canvas'),camCtx=camCanvas.getContext('2d',{willReadFrequently:true});
+async function startScan(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.jsQR){$('#scanFile').click();return}
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280}},audio:false});
+  }catch(e){toast('카메라를 쓸 수 없어 사진으로 찍습니다. 설정에서 카메라를 허용하세요.');$('#scanFile').click();return}
+  var v=$('#camVideo');v.srcObject=camStream;$('#cam').hidden=false;$('#camMsg').textContent='QR을 네모 안에 맞추세요';
+  try{await v.play()}catch(e){}
+  tick();
+}
+function stopScan(){
+  cancelAnimationFrame(camRaf);
+  if(camStream){camStream.getTracks().forEach(function(t){t.stop()});camStream=null}
+  $('#cam').hidden=true;
+}
+function tick(){
+  var v=$('#camVideo');
+  if(!camStream)return;
+  if(v.readyState>=2&&v.videoWidth){
+    var s=Math.min(1,720/Math.max(v.videoWidth,v.videoHeight));
+    camCanvas.width=Math.round(v.videoWidth*s);camCanvas.height=Math.round(v.videoHeight*s);
+    camCtx.drawImage(v,0,0,camCanvas.width,camCanvas.height);
+    var d=camCtx.getImageData(0,0,camCanvas.width,camCanvas.height);
+    var r=jsQR(d.data,d.width,d.height,{inversionAttempts:'dontInvert'});
+    if(r&&r.data&&normCode(r.data)){
+      if(navigator.vibrate)try{navigator.vibrate(60)}catch(e){}
+      var code=r.data;stopScan();openCode(code);return;
+    }
+  }
+  camRaf=requestAnimationFrame(tick);
+}
+$('#camClose').addEventListener('click',stopScan);
+document.addEventListener('visibilitychange',function(){if(document.hidden&&camStream)stopScan()});
+$('#scanFile').addEventListener('click',function(){if(camStream)stopScan()});
+
+render();
+if('serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(function(){})}
+})();
+</script>
+
+</body>
+</html>
