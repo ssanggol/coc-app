@@ -178,8 +178,8 @@ var ROLES = {
 };
 var CRIMES = ['절도','강도','살인','방화','사기','폭행','상해','성폭력','강추','주침','무취','교통','화재','변사','미상'];
 var PRESETS = ['담배꽁초','휴대폰','면봉','흉기','의류','현금','지갑','신발'];
-var EVLABEL = {register:'등록', seal:'봉인', handover:'인계', receive:'인수', damage:'손상 보고', link:'사건번호 연결', repack:'재포장', from:'재포장으로 생성', access:'담당자 추가', intake:'입고 · QR↔바코드 일치 등록', open:'개봉', issue:'재봉인용 QR 발급'};
-var STATUS = {open:['봉인 전','warn'], sealed:['봉인됨',''], transit:['인계 중',''], damaged:['봉인 이상','bad'], repacked:['재포장됨','good'], opened:['개봉됨','warn']};
+var EVLABEL = {register:'등록', seal:'봉인', handover:'인계', receive:'인수', damage:'손상 보고', link:'사건번호 연결', repack:'재포장', from:'재포장으로 생성', access:'담당자 추가', intake:'입고 · QR↔바코드 일치 등록', open:'개봉', issue:'재봉인용 QR 발급', dispose:'최종 처분'};
+var STATUS = {open:['봉인 전','warn'], sealed:['봉인됨',''], transit:['인계 중',''], damaged:['봉인 이상','bad'], repacked:['재포장됨','good'], opened:['개봉됨','warn'], closed:['종결','good']};
 
 /* ---------- small helpers ---------- */
 function $(s){return document.querySelector(s)}
@@ -463,7 +463,7 @@ VIEWS.home=async function(){
   '<form class="card" id="nameForm"><label for="myName" style="font-weight:700">내 이름 <span class="small" style="font-weight:400">(시연용 · '+esc(role().label)+')</span></label><div style="display:grid;grid-template-columns:1fr auto;gap:8px"><input class="input" id="myName" value="'+esc(myName())+'"><button class="btn outline" type="submit">저장</button></div><span class="small">사건 담당자로 등록된 이름만 그 증거물을 볼 수 있습니다.</span></form>'+
   '<button class="btn" type="button" data-act="sheet">시연용 QR 스티커 보기</button>'+
   '<div class="card"><h2>시연 순서</h2><ol class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">'+
-  '<li>다른 화면(PC 등)에 시연용 QR 스티커를 띄우거나 인쇄합니다.</li><li>지역경찰로 촬영 → 등록 → 내용물 → 봉인 사진 → 봉인 완료.</li><li>인계하기에서 과학수사를 고릅니다.</li><li>위에서 신분을 과학수사로 바꾸고 같은 QR을 찍어 인수합니다.</li><li>과학수사에서 다시 형사(수사)나 지역경찰로 인계해 봅니다.</li><li>압수물 관리로 인계 → 인수하고 바로 입고 → 바코드를 찍어 QR과 일치 등록합니다. 이후 바코드 번호로도 같은 봉투가 열립니다.</li><li>압수물 관리자가 재봉인용 QR을 발급하고 과학수사로 인계 → 과학수사가 개봉 후 그 QR로 재포장 → 압수물 관리로 인계 → 재입고하며 바코드를 그 QR에 일치 등록합니다.</li><li>사건번호 연결, 연계확인서, 위변조 시험을 확인합니다.</li></ol>'+
+  '<li>다른 화면(PC 등)에 시연용 QR 스티커를 띄우거나 인쇄합니다.</li><li>지역경찰로 촬영 → 등록 → 내용물 → 봉인 사진 → 봉인 완료.</li><li>인계하기에서 과학수사를 고릅니다.</li><li>위에서 신분을 과학수사로 바꾸고 같은 QR을 찍어 인수합니다.</li><li>과학수사에서 다시 형사(수사)나 지역경찰로 인계해 봅니다.</li><li>압수물 관리로 인계 → 인수하고 바로 입고 → 바코드를 찍어 QR과 일치 등록합니다. 이후 바코드 번호로도 같은 봉투가 열립니다.</li><li>압수물 관리자가 재봉인용 QR을 발급하고 과학수사로 인계 → 과학수사가 개봉 후 그 QR로 재포장 → 압수물 관리로 인계 → 재입고하며 바코드를 그 QR에 일치 등록합니다.</li><li>형사(수사)는 송치·환부, 과학수사는 폐기로 최종 처분해 연계를 닫습니다.</li><li>사건번호 연결, 연계확인서, 위변조 시험을 확인합니다.</li></ol>'+
   '</div>'+
   '<div class="card"><h2>이 폰의 기록</h2><p class="small" style="margin:0">기록은 이 폰 안에만 저장됩니다. 시연용 가짜 데이터만 쓰세요.</p>'+
   '<div class="btn-row"><button class="btn" type="button" data-act="backup">백업 내보내기</button><button class="btn" type="button" data-act="resetAsk">기록 지우기</button></div>'+
@@ -547,10 +547,11 @@ VIEWS.detail=async function(v){
     if(e.type==='access')extra=' · '+esc(keyLabel(b.data.key||''));
     if(e.type==='intake')extra=' · 바코드 '+esc(b.data.barcode||'')+(b.data.byPhoto?' (사진 판독)':' (직접 입력)');
     if(e.type==='open')extra=' · '+esc(b.data.reason||'');
+    if(e.type==='dispose')extra=' · '+esc(b.data.summary||b.data.kind||'');
     if(e.type==='from')extra=' ← '+esc(b.data.from||'')+' · '+(b.data.attach==='item'?'증거물에 부착':'포장에 부착');
     return '<div class="ev"><span class="dot"></span><div class="body"><b>'+esc(EVLABEL[e.type]||e.type)+extra+'</b><div class="small">'+fmtTime(b.at)+' · '+esc(b.actor?b.actor.label+' ('+b.actor.org+')':'')+'</div><div class="hash">#'+e.seq+' '+esc(e.hash.slice(0,16))+'…</div></div></div>';
   }).join('');
-  var holderTxt=it.status==='transit'?'인계 중 → '+(ROLES[it.to]||{}).label:'보관: '+(ROLES[it.holder]||{}).label;
+  var holderTxt=it.status==='closed'?'종결 · '+(ROLES[it.holder]||{}).label+' 처분':it.status==='transit'?'인계 중 → '+(ROLES[it.to]||{}).label:'보관: '+(ROLES[it.holder]||{}).label;
   var actions='';
   if(isHolder&&(it.status==='sealed'||it.status==='damaged'||it.status==='opened')){
     var isStore=me==='storage',needIntake=isStore&&!it.barcode&&it.idType!=='barcode'&&it.status==='sealed';
@@ -559,6 +560,7 @@ VIEWS.detail=async function(v){
     (isStore?'<button class="btn outline" type="button" data-act="issue">재봉인용 QR 발급 (반출 전)</button>':'')+
     '<button class="btn outline" type="button" data-act="repack">'+(isStore?'재포장 · 새 포장 바코드':'재포장 · 발급받은 재봉인용 QR')+'</button>'+
     (it.status==='sealed'?'<button class="btn" type="button" data-act="openpkg">개봉 기록 (감식 등)</button>':'')+
+    (me==='detective'||me==='forensic'?'<button class="btn" type="button" data-act="dispose">최종 처분 · '+(me==='detective'?'송치·환부':'폐기')+'</button>':'')+
     '<div class="btn-row"><button class="btn" type="button" data-act="cert">연계확인서</button><button class="btn" type="button" data-act="damage">손상 보고</button></div>'+
     (isStore?'':'<p class="small" style="margin:0">바코드와 재봉인용 QR은 압수물 관리자만 발급합니다. 재포장은 이 봉투용으로 발급받은 QR로만 할 수 있습니다.</p>');
   }else if(isHolder&&it.status==='open'){
@@ -574,6 +576,7 @@ VIEWS.detail=async function(v){
   (it.barcode?'<div class="banner good">QR <b class="mono">'+esc(it.code)+'</b> ↔ 바코드 <b class="mono">'+esc(it.barcode)+'</b> 일치 등록됨</div>':'')+
   ((it.reseal||[]).length&&it.status!=='repacked'?'<div class="banner info">재봉인용 QR 발급됨: <b class="mono">'+esc(it.reseal.join(', '))+'</b> (미사용)</div>':'')+
   (it.idType==='qr'&&!it.barcode&&it.parent?'<div class="banner warn">재봉인용 QR로 재포장됨 · 아직 바코드 없음. 압수물 관리자에게 재입고하세요</div>':'')+
+  (it.status==='closed'&&it.disposal?'<div class="banner good" style="flex-direction:column;gap:2px"><b>연계 종결 · '+esc(it.disposal.kind)+'</b><span>'+esc(it.disposal.summary)+'</span><span class="small">'+esc(fmtTime(it.disposal.at))+' · 이후 인계할 수 없습니다</span></div>':'')+
   (it.status==='opened'&&it.opened?'<div class="banner warn">개봉됨 · '+esc(it.opened.reason)+' · 압수물 관리자에게 넘겨 재포장해야 합니다</div>':'')+
   (it.status==='repacked'?'<div class="banner good" style="flex-direction:column;gap:8px"><span>재포장되어 이 봉투의 기록은 끝났습니다. 이력은 새 포장으로 이어집니다.</span><div class="chips">'+(it.children||[]).map(function(c){return '<button type="button" class="chip sm mono" data-open="'+esc(c)+'">새 포장 '+esc(c)+'</button>'}).join('')+'</div></div>':'')+
   (it.parent?'<div class="banner info" style="justify-content:space-between;align-items:center"><span>재포장 전 봉투 <b class="mono">'+esc(it.parent)+'</b>에서 이어진 포장</span><button type="button" class="btn ghost" data-open="'+esc(it.parent)+'" style="min-height:40px">이전 이력</button></div>':'')+
@@ -669,6 +672,39 @@ VIEWS.issue=async function(v){
   '<button class="btn ghost" type="button" data-act="back">취소</button>';
 };
 
+/* ---------- 최종 처분 (체인 종료) ---------- */
+var DISPOSE_WHY=['감식 완료 · 보존 불필요','오염·훼손','기타'];
+function keepDispose(){var a=$('#dTo'),b=$('#dRef'),c=$('#dName');if(a)view.dTo=a.value;if(b)view.dRef=b.value;if(c)view.dName=c.value}
+VIEWS.dispose=async function(v){
+  var it=await store.getItem(v.code);
+  var opts=me==='detective'?['송치','환부']:(me==='forensic'?['폐기']:[]);
+  if(!opts.length)return '<h1>최종 처분</h1><div class="banner bad">최종 처분은 담당 형사(수사관) 또는 과학수사관이 합니다.</div><button class="btn ghost" type="button" data-act="back">돌아가기</button>';
+  if(opts.indexOf(v.kind)<0)v.kind=opts[0];
+  v.recv=v.recv||'피해자';v.why=v.why||DISPOSE_WHY[0];
+  var f='';
+  if(v.kind==='송치'){
+    f='<div class="field"><label for="dTo">송부처</label><input class="input" id="dTo" value="'+esc(v.dTo!=null?v.dTo:'공소청')+'"></div>'+
+      '<div class="field"><label for="dRef">송치 번호 <span class="small" style="font-weight:400">(있으면)</span></label><input class="input mono" id="dRef" value="'+esc(v.dRef||'')+'"></div>'+
+      '<p class="small" style="margin:0">연계확인서를 함께 송부하세요. 처분 후에도 연계확인서는 출력할 수 있습니다.</p>';
+  }else if(v.kind==='환부'){
+    f='<div class="field"><label>수령인</label><div class="chips">'+['피해자','압수대상자','기타'].map(function(r){return '<button type="button" class="chip" data-recv="'+r+'" aria-pressed="'+(v.recv===r)+'">'+r+'</button>'}).join('')+'</div></div>'+
+      '<div class="field"><label for="dName">수령인 이름</label><input class="input" id="dName" value="'+esc(v.dName||'')+'"></div>'+
+      '<label class="banner info" style="cursor:pointer"><input type="checkbox" id="dOrder"'+(v.order?' checked':'')+' style="width:22px;height:22px;margin:0;flex-shrink:0"><span>검사의 환부 지휘를 받았습니다</span></label>'+
+      '<div class="field"><label for="dRef">지휘 일자·번호 <span class="small" style="font-weight:400">(있으면)</span></label><input class="input mono" id="dRef" value="'+esc(v.dRef||'')+'"></div>';
+  }else{
+    f='<div class="field"><label>폐기 사유</label><div class="chips">'+DISPOSE_WHY.map(function(r){return '<button type="button" class="chip sm" data-why="'+r+'" aria-pressed="'+(v.why===r)+'">'+r+'</button>'}).join('')+'</div></div>'+
+      '<div class="field"><label for="dRef">폐기 방법 <span class="small" style="font-weight:400">(있으면)</span></label><input class="input" id="dRef" value="'+esc(v.dRef||'')+'"></div>';
+  }
+  var plabel={'송치':'송부 시 봉인 상태 사진','환부':'환부(수령) 확인 사진','폐기':'폐기 사진'}[v.kind];
+  var ok=v.photo&&(v.kind!=='환부'||(v.order&&(v.dName||'').trim()));
+  return '<p class="eyebrow">'+esc(kindLabel(it))+' <span class="mono">'+esc(it.code)+'</span> · '+esc(contentsLine(it.contents))+'</p><h1>최종 처분</h1>'+
+  (opts.length>1?'<div class="btn-row">'+opts.map(function(k){return '<button type="button" class="chip" data-dkind="'+k+'" aria-pressed="'+(v.kind===k)+'">'+k+'</button>'}).join('')+'</div>':'')+
+  f+photoBlock(v,plabel,true)+
+  '<div class="banner warn">처분하면 이 봉투의 연계 기록이 끝나고 더 이상 인계할 수 없습니다.</div>'+
+  '<button class="btn primary" type="button" data-act="doDispose"'+(ok?'':' disabled')+'>'+esc(v.kind)+'(으)로 연계 종결</button>'+
+  '<button class="btn ghost" type="button" data-act="back">취소</button>';
+};
+
 /* ---------- repack ---------- */
 VIEWS.repack=async function(v){
   var it=await store.getItem(v.code);
@@ -749,7 +785,7 @@ VIEWS.cert=async function(v){
   v.html=certFile(it,evs,ver);
   var rows=evs.map(function(e){var b=parsed(e);return '<tr><td>'+e.seq+'</td><td class="mono" style="white-space:nowrap">'+esc(fmtTime(b.at))+'</td><td>'+esc(EVLABEL[e.type]||e.type)+'</td><td>'+esc(b.actor?b.actor.label:'')+'</td><td class="mono">'+esc(e.hash.slice(0,8))+'</td></tr>'}).join('');
   return '<div class="doc"><h2>증거물 연계확인서</h2>'+
-  '<dl class="kv"><dt>식별 QR</dt><dd class="mono">'+esc(it.code)+' ('+esc(kindLabel(it))+')</dd><dt>현장번호</dt><dd>'+esc(it.site)+'</dd><dt>사건번호</dt><dd class="mono">'+esc([it.kics&&'KICS '+it.kics,it.scas&&'SCAS '+it.scas].filter(Boolean).join(' / ')||'미연결')+'</dd><dt>내용물</dt><dd>'+esc(contentsLine(it.contents))+'</dd><dt>현재 상태</dt><dd>'+esc((STATUS[it.status]||[''])[0])+'</dd></dl>'+
+  '<dl class="kv"><dt>식별 QR</dt><dd class="mono">'+esc(it.code)+' ('+esc(kindLabel(it))+')</dd><dt>현장번호</dt><dd>'+esc(it.site)+'</dd><dt>사건번호</dt><dd class="mono">'+esc([it.kics&&'KICS '+it.kics,it.scas&&'SCAS '+it.scas].filter(Boolean).join(' / ')||'미연결')+'</dd><dt>내용물</dt><dd>'+esc(contentsLine(it.contents))+'</dd><dt>현재 상태</dt><dd>'+esc((STATUS[it.status]||[''])[0])+'</dd>'+(it.disposal?'<dt>최종 처분</dt><dd>'+esc(it.disposal.summary)+' ('+esc(fmtFull(it.disposal.at))+')</dd>':'')+'</dl>'+
   '<div class="tbl-wrap"><table><thead><tr><th>순번</th><th>일시</th><th>구분</th><th>담당</th><th>해시</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
   (ver.ok?'<div class="banner good">해시 체인 검증 통과 · '+ver.count+'건</div><div><span class="small">최종 해시 (SHA-256)</span><div class="mono" style="font-size:12px;overflow-wrap:anywhere">'+esc(ver.last)+'</div></div>'
          :'<div class="banner bad">'+ver.at+'번째 기록부터 해시가 맞지 않습니다. 기록이 바뀐 것입니다.</div>')+
@@ -763,7 +799,7 @@ function certFile(it,evs,ver){
   var rows=evs.map(function(e){var b=parsed(e);return '<tr><td>'+e.seq+'</td><td>'+esc(fmtFull(b.at))+'</td><td>'+esc(EVLABEL[e.type]||e.type)+'</td><td>'+esc(b.actor?b.actor.label+' · '+b.actor.org:'')+'</td><td style="font-family:monospace;font-size:11px;word-break:break-all">'+esc(e.hash)+'</td></tr>'}).join('');
   var raw=evs.map(function(e){return '<li style="font-family:monospace;font-size:11px;word-break:break-all">#'+e.seq+' '+esc(e.body)+'</li>'}).join('');
   return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>연계확인서 '+esc(it.code)+'</title></head><body style="font-family:sans-serif;max-width:800px;margin:24px auto;padding:0 16px">'+
-  '<h1 style="text-align:center">증거물 연계확인서</h1><p>식별 QR: '+esc(it.code)+' / 현장번호: '+esc(it.site)+' / 사건번호: '+esc([it.kics&&'KICS '+it.kics,it.scas&&'SCAS '+it.scas].filter(Boolean).join(', ')||'미연결')+'</p><p>내용물: '+esc(contentsLine(it.contents))+'</p>'+
+  '<h1 style="text-align:center">증거물 연계확인서</h1><p>식별 QR: '+esc(it.code)+' / 현장번호: '+esc(it.site)+' / 사건번호: '+esc([it.kics&&'KICS '+it.kics,it.scas&&'SCAS '+it.scas].filter(Boolean).join(', ')||'미연결')+'</p><p>내용물: '+esc(contentsLine(it.contents))+'</p>'+(it.disposal?'<p>최종 처분: '+esc(it.disposal.summary)+' ('+esc(fmtFull(it.disposal.at))+')</p>':'')+
   '<table border="1" cellpadding="6" style="border-collapse:collapse;width:100%"><tr><th>순번</th><th>일시</th><th>구분</th><th>담당</th><th>SHA-256</th></tr>'+rows+'</table>'+
   '<p>검증 결과: '+(ver.ok?'통과 ('+ver.count+'건)':'불일치 ('+ver.at+'번째 기록부터)')+'</p><p>최종 해시: <code>'+esc(ver.last||'')+'</code></p>'+
   '<h2>원본 기록 (재계산용)</h2><p>각 줄의 내용을 SHA-256으로 계산하면 위 표의 해시와 같아야 합니다.</p><ol>'+raw+'</ol>'+
@@ -802,6 +838,7 @@ document.addEventListener('click',function(e){
   if(d.dtype){view.dtype=d.dtype;render();return}
   if(d.ok!==undefined){view.ok=d.ok==='1';render();return}
   if(d.reason){view.reason=d.reason;render();return}
+  if(d.dkind||d.recv||d.why){keepDispose();if(d.dkind)view.kind=d.dkind;if(d.recv)view.recv=d.recv;if(d.why)view.why=d.why;render();return}
   if(d.pview!==undefined){store.getItem(view.code).then(function(it){showPhoto(it,+d.pview)});return}
   if(d.rmissue!==undefined){view.issue.splice(+d.rmissue,1);render();return}
   if(d.useqr){var ex=view.packs.length;view.packs.push({code:d.useqr,attach:'pack'});
@@ -830,6 +867,22 @@ document.addEventListener('click',function(e){
     intake:function(){go({name:'intake',code:view.code,from:{name:'detail',code:view.code}})},
     openpkg:function(){go({name:'openpkg',code:view.code,from:{name:'detail',code:view.code}})},
     issue:function(){go({name:'issue',code:view.code,from:{name:'detail',code:view.code}})},
+    dispose:function(){go({name:'dispose',code:view.code,from:{name:'detail',code:view.code}})},
+    doDispose:function(){guard(async function(){
+      keepDispose();
+      var v=view,it=await store.getItem(v.code),data={kind:v.kind,photoHash:v.photo.hash},sum;
+      var ref=(v.dRef||'').trim();
+      if(v.kind==='송치'){var to=(v.dTo||'').trim()||'공소청';data.to=to;data.ref=ref;sum='송치 · '+to+' 송부'+(ref?' · '+ref:'');}
+      else if(v.kind==='환부'){var nm=(v.dName||'').trim();if(!nm||!v.order){toast('수령인 이름과 검사 지휘 확인이 필요합니다');return}
+        data.receiver=v.recv;data.receiverName=nm;data.prosecutorOrder=true;data.ref=ref;sum='환부 · '+v.recv+' '+nm+' · 검사 지휘'+(ref?' '+ref:'');}
+      else{data.reason=v.why;data.method=ref;sum='폐기 · '+v.why+(ref?' · '+ref:'');}
+      data.summary=sum;
+      await appendEvent(v.code,'dispose',data);
+      it.status='closed';it.to=null;it.disposal={kind:v.kind,summary:sum,at:new Date().toISOString()};addPhoto(it,'최종 처분 · '+v.kind,v.photo);
+      (it.reseal||[]).forEach(function(c){delete mem.issued[c]});it.reseal=[];persist();
+      await store.putItem(it);
+      toast('연계를 종결했습니다 · '+sum);go({name:'detail',code:v.code});
+    })},
     doIssue:function(){guard(async function(){
       var v=view,it=await store.getItem(v.code);
       await appendEvent(v.code,'issue',{qr:v.issue.slice()});
@@ -994,9 +1047,13 @@ document.addEventListener('submit',function(e){
   })()}
   if(e.target.id==='customForm'){var n=$('#customName').value.trim();if(!n)return;var rs=view.rows,f=rs.filter(function(r){return r.name===n})[0];if(f)f.qty++;else rs.push({name:n,qty:1,nature:[]});render()}
 });
+document.addEventListener('input',function(e){
+  if(e.target.id==='dName'&&view.name==='dispose'){view.dName=e.target.value;var b=$('[data-act=doDispose]');if(b)b.disabled=!(view.photo&&view.order&&view.dName.trim())}
+});
 document.addEventListener('change',function(e){
   var t=e.target;
   if(t.id==='ackDamage'){view.ack=t.checked;render();return}
+  if(t.id==='dOrder'){keepDispose();view.order=t.checked;render();return}
   if(t.dataset&&t.dataset.sel){view.sel[t.dataset.sel]=t.checked;view.kics=$('#kics').value;view.scas=$('#scas').value;render();return}
 });
 $('#scanFile').addEventListener('change',async function(){
@@ -1029,7 +1086,7 @@ $('#packQrFile').addEventListener('change',async function(){
 $('#pvClose').addEventListener('click',function(){var pv=$('#pv');pv.hidden=true;if(pv.dataset.url)URL.revokeObjectURL(pv.dataset.url);$('#pvImg').src=''});
 $('#photoFile').addEventListener('change',async function(){
   var f=this.files&&this.files[0];this.value='';if(!f)return;
-  var ic=$('#intakeCode'),pc=$('#packCode');if(ic)view.intakeCode=ic.value;if(pc)view.packInput=pc.value;
+  var ic=$('#intakeCode'),pc=$('#packCode');if(ic)view.intakeCode=ic.value;if(pc)view.packInput=pc.value;if(view.name==='dispose')keepDispose();
   try{var ph=await photoInfo(f);try{await idbPut(ph.hash,f)}catch(e){toast('원본을 폰에 저장하지 못했습니다 (저장 공간 확인)')}view.photo=ph;render()}catch(e){toast('사진을 읽지 못했습니다.')}
 });
 
