@@ -159,11 +159,8 @@ td.mono{font-size:12px}
 /* ---------- constants ---------- */
 var ROLES = {
   police:   {key:'police',   label:'지역경찰', org:'서울청 방배서 남태령지구대', prefix:'서울100남'},
-  detective:{key:'detective',label:'형사',     org:'서울청 방배서 형사과',       prefix:'서울100형'},
-  invest:   {key:'invest',   label:'수사',     org:'서울청 방배서 수사과',       prefix:'서울100수'},
-  women:    {key:'women',    label:'여청',     org:'서울청 방배서 여성청소년과', prefix:'서울100여'},
-  forensic: {key:'forensic', label:'과학수사', org:'서울청 광역과학수사 6팀',    prefix:'서울광6'},
-  storage:  {key:'storage',  label:'압수물 보관', org:'서울청 방배서 압수물보관실', prefix:'서울100보'}
+  detective:{key:'detective',label:'형사(수사)', org:'서울청 방배서 형사·수사과', prefix:'서울100형'},
+  forensic: {key:'forensic', label:'과학수사', org:'서울청 광역과학수사 6팀',    prefix:'서울광6'}
 };
 var CRIMES = ['절도','강도','살인','방화','사기','폭행','상해','성폭력','강추','주침','무취','교통','화재','변사','미상'];
 var PRESETS = ['담배꽁초','휴대폰','면봉','흉기','의류','현금','지갑','신발'];
@@ -369,7 +366,7 @@ VIEWS.home=async function(){
   (sending.length?'<div class="list-h"><h2>인계 중</h2><span class="small">상대 인수 대기</span></div>'+list(sending,''):'')+
   '<button class="btn" type="button" data-act="sheet">시연용 QR 스티커 보기</button>'+
   '<div class="card"><h2>시연 순서</h2><ol class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">'+
-  '<li>다른 화면(PC 등)에 시연용 QR 스티커를 띄우거나 인쇄합니다.</li><li>지역경찰로 촬영 → 등록 → 내용물 → 봉인 사진 → 봉인 완료.</li><li>인계하기에서 받는 사람(형사)을 고릅니다.</li><li>위에서 신분을 형사로 바꾸고 같은 QR을 찍어 인수합니다.</li><li>사건번호 연결, 연계확인서, 위변조 시험을 확인합니다.</li></ol>'+
+  '<li>다른 화면(PC 등)에 시연용 QR 스티커를 띄우거나 인쇄합니다.</li><li>지역경찰로 촬영 → 등록 → 내용물 → 봉인 사진 → 봉인 완료.</li><li>인계하기에서 과학수사를 고릅니다.</li><li>위에서 신분을 과학수사로 바꾸고 같은 QR을 찍어 인수합니다.</li><li>과학수사에서 다시 형사(수사)나 지역경찰로 인계해 봅니다.</li><li>사건번호 연결, 연계확인서, 위변조 시험을 확인합니다.</li></ol>'+
   '</div>'+
   '<div class="card"><h2>이 폰의 기록</h2><p class="small" style="margin:0">기록은 이 폰 안에만 저장됩니다. 시연용 가짜 데이터만 쓰세요.</p>'+
   '<div class="btn-row"><button class="btn" type="button" data-act="backup">백업 내보내기</button><button class="btn" type="button" data-act="resetAsk">기록 지우기</button></div>'+
@@ -481,7 +478,7 @@ VIEWS.handover=async function(v){
   var others=Object.keys(ROLES).filter(function(k){return k!==me});
   v.to=v.to||others[0];
   return '<p class="eyebrow">'+esc(kindLabel(it))+' <span class="mono">'+esc(it.code)+'</span> · '+totalQty(it.contents)+'점</p><h1>어느 기능에 넘기나요?</h1>'+
-  '<div class="btn-row">'+others.map(function(k){return '<button type="button" class="chip" style="min-height:64px;text-align:left;padding:8px 12px" data-to="'+k+'" aria-pressed="'+(v.to===k)+'"><b>'+esc(ROLES[k].label)+'</b><br><span class="small">'+esc(ROLES[k].org)+'</span></button>'}).join('')+'</div>'+
+  '<div style="display:flex;flex-direction:column;gap:8px">'+others.map(function(k){return '<button type="button" class="chip" style="min-height:64px;text-align:left;padding:8px 14px" data-to="'+k+'" aria-pressed="'+(v.to===k)+'"><b>'+esc(ROLES[k].label)+'</b><br><span class="small">'+esc(ROLES[k].org)+'</span></button>'}).join('')+'</div>'+
   '<div class="field"><label for="toName">받는 사람 <span class="small" style="font-weight:400">(선택 · 예: 강력1팀 경사 홍길동)</span></label><input class="input" id="toName" placeholder="팀·계급·이름" value="'+esc(v.toName||'')+'"></div>'+
   '<div class="banner info">상대가 같은 QR을 찍고 인수를 확인해야 인계가 끝납니다.</div>'+
   '<button class="btn primary" type="button" data-act="doHandover">인계 · '+esc(ROLES[v.to].label)+'에게</button>'+
