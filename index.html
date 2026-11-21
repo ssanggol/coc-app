@@ -57,6 +57,8 @@ main{padding-block:16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px)
 h1{font-size:22px;margin:0;line-height:1.3;text-wrap:balance}
 h2{font-size:15px;margin:0}
 .eyebrow{font-size:13px;color:var(--muted);margin:0}
+details.card:not([open]){gap:0}
+details.card summary{list-style-position:inside}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
 .rows{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:2px 16px}
 .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);min-width:0}
@@ -440,34 +442,57 @@ function levelFor(c){
 var VIEWS={};
 
 /* ---------- home ---------- */
+var HOME_HINT={
+  police:'현장에서 스티커를 찍어 등록 · 봉인 · 인계',
+  detective:'QR·바코드를 찍어 인수 · 인계 · 송치/환부',
+  forensic:'QR·바코드를 찍어 인수 · 개봉 · 재포장 · 폐기',
+  storage:'QR·바코드를 찍어 인수 · 입고 · 재봉인용 QR 발급'
+};
+function nextStep(i){
+  if(i.status==='transit'&&i.to===me)return ['인수하기','warn'];
+  if(i.holder!==me)return null;
+  if(i.status==='open')return ['봉인 마저 하기','warn'];
+  if(i.status==='opened')return ['재포장 필요','warn'];
+  if(i.status==='damaged')return ['손상 확인','bad'];
+  if(me==='storage'&&!i.barcode&&i.idType!=='barcode'&&i.status==='sealed')return [i.parent?'재입고 필요':'입고 필요','warn'];
+  if(me!=='storage'&&i.idType==='qr'&&i.parent&&!i.barcode&&i.status==='sealed')return ['관리자에게 재입고','warn'];
+  return null;
+}
 VIEWS.home=async function(){
-  var items=await store.listItems();
-  var incoming=items.filter(function(i){return i.status==='transit'&&i.to===me&&canView(i)});
-  items=items.filter(canView);
-  var mine=items.filter(function(i){return i.holder===me&&i.status!=='transit'&&i.status!=='repacked'});
-  var sending=items.filter(function(i){return i.holder===me&&i.status==='transit'});
+  var items=(await store.listItems()).filter(canView);
+  var todo=[],keep=[],sending=[],closed=[];
+  items.forEach(function(i){
+    if(i.status==='closed'){if(i.holder===me)closed.push(i);return}
+    if(i.status==='repacked')return;
+    var n=nextStep(i);
+    if(n)todo.push([i,n]);
+    else if(i.holder===me&&i.status==='transit')sending.push(i);
+    else if(i.holder===me)keep.push(i);
+  });
   var site=currentSite();
-  function list(arr,empty){
-    if(!arr.length)return '<p class="empty">'+esc(empty)+'</p>';
-    return '<div class="rows">'+arr.map(function(i){
-      return '<button type="button" class="row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;text-align:left" data-open="'+esc(i.code)+'"><span class="l"><b><span class="mono">'+esc(i.code)+'</span> · '+esc(kindLabel(i))+' '+totalQty(i.contents)+'점</b><span class="small">'+esc(i.site)+'</span></span>'+statusPill(i)+'</button>';
-    }).join('')+'</div>';
+  function row(i,n){
+    return '<button type="button" class="row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;text-align:left" data-open="'+esc(i.code)+'"><span class="l"><b><span class="mono">'+esc(i.barcode||i.code)+'</span> · '+esc(kindLabel(i))+' '+totalQty(i.contents)+'점</b><span class="small">'+esc(i.site)+(i.kics?' · KICS '+esc(i.kics):'')+'</span></span>'+(n?'<span class="pill '+n[1]+'">'+esc(n[0])+'</span>':statusPill(i))+'</button>';
   }
+  function list(arr){return '<div class="rows">'+arr.join('')+'</div>'}
+  var demoOpen=view.resetAsk||!myName();
   return ''+
-  '<button type="button" class="scan" data-act="liveScan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M7 12h10"/></svg><b>QR 촬영해서 스캔</b><span>카메라를 스티커에 비추면 다음 할 일이 나옵니다</span></button>'+
-  '<form class="btn-row" id="manualForm" style="grid-template-columns:1fr auto"><label for="codeInput" class="vh">QR 아래 번호</label><input class="input mono" id="codeInput" maxlength="30" autocapitalize="characters" placeholder="QR·바코드 번호"><button class="btn outline" type="submit">열기</button></form>'+
-  (site?'<div class="banner info"><span>진행 중인 현장 <b>'+esc(site.site)+'</b></span></div>':'')+
-  (incoming.length?'<div class="list-h"><h2>인수 대기</h2><span class="pill warn">'+incoming.length+'</span></div>'+list(incoming,''):'')+
-  '<div class="list-h"><h2>내가 보관 중</h2><span class="small">'+mine.length+'건</span></div>'+list(mine,'아직 없습니다. 스티커를 찍어 첫 증거물을 등록하세요.')+
-  (sending.length?'<div class="list-h"><h2>인계 중</h2><span class="small">상대 인수 대기</span></div>'+list(sending,''):'')+
-  '<form class="card" id="nameForm"><label for="myName" style="font-weight:700">내 이름 <span class="small" style="font-weight:400">(시연용 · '+esc(role().label)+')</span></label><div style="display:grid;grid-template-columns:1fr auto;gap:8px"><input class="input" id="myName" value="'+esc(myName())+'"><button class="btn outline" type="submit">저장</button></div><span class="small">사건 담당자로 등록된 이름만 그 증거물을 볼 수 있습니다.</span></form>'+
+  '<button type="button" class="scan" data-act="liveScan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M7 12h10"/></svg><b>'+(me==='police'?'QR 찍기':'QR·바코드 찍기')+'</b><span>'+esc(HOME_HINT[me]||'')+'</span></button>'+
+  '<form class="btn-row" id="manualForm" style="grid-template-columns:1fr auto"><label for="codeInput" class="vh">QR 아래 번호</label><input class="input mono" id="codeInput" maxlength="30" autocapitalize="characters" placeholder="'+(me==='police'?'카메라가 안 되면 QR 번호 입력':'QR·바코드 번호 입력')+'"><button class="btn outline" type="submit">열기</button></form>'+
+  (site&&me==='police'?'<div class="banner info"><span>진행 중인 현장 <b>'+esc(site.site)+'</b></span></div>':'')+
+  (todo.length?'<div class="list-h"><h2>할 일</h2><span class="pill warn">'+todo.length+'</span></div>'+list(todo.map(function(t){return row(t[0],t[1])})):
+    '<div class="banner good"><span>지금 처리할 일이 없습니다</span></div>')+
+  (keep.length?'<div class="list-h"><h2>보관 중</h2><span class="small">'+keep.length+'건</span></div>'+list(keep.map(function(i){return row(i)})):'')+
+  (sending.length?'<div class="list-h"><h2>인계 중</h2><span class="small">상대 인수 대기</span></div>'+list(sending.map(function(i){return row(i)})):'')+
+  (closed.length?'<details class="card"><summary style="cursor:pointer">종결된 증거물 '+closed.length+'건</summary>'+list(closed.map(function(i){return row(i)}))+'</details>':'')+
+  (!items.length&&me==='police'?'<p class="empty">스티커를 찍으면 첫 증거물 등록이 시작됩니다.</p>':'')+
+  '<details class="card"'+(demoOpen?' open':'')+'><summary style="font-weight:700;cursor:pointer">시연 설정 · 기록 관리</summary>'+
+  '<form id="nameForm" style="display:flex;flex-direction:column;gap:8px"><label for="myName" style="font-weight:700">내 이름 <span class="small" style="font-weight:400">('+esc(role().label)+')</span></label><div style="display:grid;grid-template-columns:1fr auto;gap:8px"><input class="input" id="myName" value="'+esc(myName())+'"><button class="btn outline" type="submit">저장</button></div><span class="small">실제 운영에서는 폴리폰 계정 로그인으로 대체됩니다. 사건 담당자로 등록된 이름만 그 증거물을 볼 수 있습니다.</span></form>'+
   '<button class="btn" type="button" data-act="sheet">시연용 QR 스티커 보기</button>'+
-  '<div class="card"><h2>시연 순서</h2><ol class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">'+
-  '<li>다른 화면(PC 등)에 시연용 QR 스티커를 띄우거나 인쇄합니다.</li><li>지역경찰로 촬영 → 등록 → 내용물 → 봉인 사진 → 봉인 완료.</li><li>인계하기에서 과학수사를 고릅니다.</li><li>위에서 신분을 과학수사로 바꾸고 같은 QR을 찍어 인수합니다.</li><li>과학수사에서 다시 형사(수사)나 지역경찰로 인계해 봅니다.</li><li>압수물 관리로 인계 → 인수하고 바로 입고 → 바코드를 찍어 QR과 일치 등록합니다. 이후 바코드 번호로도 같은 봉투가 열립니다.</li><li>압수물 관리자가 재봉인용 QR을 발급하고 과학수사로 인계 → 과학수사가 개봉 후 그 QR로 재포장 → 압수물 관리로 인계 → 재입고하며 바코드를 그 QR에 일치 등록합니다.</li><li>형사(수사)는 송치·환부, 과학수사는 폐기로 최종 처분해 연계를 닫습니다.</li><li>사건번호 연결, 연계확인서, 위변조 시험을 확인합니다.</li></ol>'+
-  '</div>'+
-  '<div class="card"><h2>이 폰의 기록</h2><p class="small" style="margin:0">기록은 이 폰 안에만 저장됩니다. 시연용 가짜 데이터만 쓰세요.</p>'+
+  '<h2 style="margin:4px 0 0">시연 순서</h2><ol class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">'+
+  '<li>다른 화면(PC 등)에 시연용 QR 스티커를 띄우거나 인쇄합니다.</li><li>지역경찰로 촬영 → 등록 → 내용물 → 봉인 사진 → 봉인 완료 → 인계.</li><li>위에서 신분을 바꾸고 같은 QR을 찍어 인수합니다. 할 일 목록에 다음 할 일이 표시됩니다.</li><li>압수물 관리로 인수하고 바로 입고 → 바코드를 찍어 QR과 일치 등록합니다.</li><li>압수물 관리자가 재봉인용 QR을 발급 → 과학수사가 개봉 후 그 QR로 재포장 → 재입고합니다.</li><li>형사(수사)는 송치·환부, 과학수사는 폐기로 연계를 닫습니다.</li><li>사건번호 연결, 연계확인서, 위변조 시험을 확인합니다.</li></ol>'+
+  '<h2 style="margin:4px 0 0">이 폰의 기록</h2><p class="small" style="margin:0">기록은 이 폰 안에만 저장됩니다. 시연용 가짜 데이터만 쓰세요.</p>'+
   '<div class="btn-row"><button class="btn" type="button" data-act="backup">백업 내보내기</button><button class="btn" type="button" data-act="resetAsk">기록 지우기</button></div>'+
-  (view.resetAsk?'<div class="banner bad" style="flex-direction:column"><span>모든 시연 기록을 지웁니다. 되돌릴 수 없습니다.</span><div class="btn-row" style="width:100%"><button class="btn" type="button" data-act="home">취소</button><button class="btn warn" type="button" data-act="reset">지우기</button></div></div>':'')+'</div>';
+  (view.resetAsk?'<div class="banner bad" style="flex-direction:column"><span>모든 시연 기록을 지웁니다. 되돌릴 수 없습니다.</span><div class="btn-row" style="width:100%"><button class="btn" type="button" data-act="home">취소</button><button class="btn warn" type="button" data-act="reset">지우기</button></div></div>':'')+'</details>';
 };
 
 /* ---------- QR sheet ---------- */
