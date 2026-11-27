@@ -772,8 +772,8 @@ VIEWS.dispose=async function(v){
   }else if(v.kind==='환부'){
     f='<div class="field"><label>수령인</label><div class="chips">'+['피해자','압수대상자','기타'].map(function(r){return '<button type="button" class="chip" data-recv="'+r+'" aria-pressed="'+(v.recv===r)+'">'+r+'</button>'}).join('')+'</div></div>'+
       '<div class="field"><label for="dName">수령인 이름</label><input class="input" id="dName" value="'+esc(v.dName||'')+'"></div>'+
-      '<label class="banner info" style="cursor:pointer"><input type="checkbox" id="dOrder"'+(v.order?' checked':'')+' style="width:22px;height:22px;margin:0;flex-shrink:0"><span>검사의 환부 지휘를 받았습니다</span></label>'+
-      '<div class="field"><label for="dRef">지휘 일자·번호 <span class="small" style="font-weight:400">(있으면)</span></label><input class="input mono" id="dRef" value="'+esc(v.dRef||'')+'"></div>';
+      '<label class="banner info" style="cursor:pointer"><input type="checkbox" id="dOrder"'+(v.order?' checked':'')+' style="width:22px;height:22px;margin:0;flex-shrink:0"><span>검사의 환부 지휘(개정 규칙 시행 후에는 검사 의견 청취)를 거쳤습니다</span></label>'+
+      '<div class="field"><label for="dRef">지휘·의견 일자·번호 <span class="small" style="font-weight:400">(있으면)</span></label><input class="input mono" id="dRef" value="'+esc(v.dRef||'')+'"></div>';
   }else{
     f='<div class="field"><label>폐기 사유</label><div class="chips">'+DISPOSE_WHY.map(function(r){return '<button type="button" class="chip sm" data-why="'+r+'" aria-pressed="'+(v.why===r)+'">'+r+'</button>'}).join('')+'</div></div>'+
       '<div class="field"><label for="dRef">폐기 방법 <span class="small" style="font-weight:400">(있으면)</span></label><input class="input" id="dRef" value="'+esc(v.dRef||'')+'"></div>';
@@ -977,8 +977,8 @@ document.addEventListener('click',function(e){
       var v=view,it=await store.getItem(v.code),data={kind:v.kind,photoHash:v.photo.hash},sum;
       var ref=(v.dRef||'').trim();
       if(v.kind==='송치'){var to=(v.dTo||'').trim()||'공소청';data.to=to;data.ref=ref;sum='송치 · '+to+' 송부'+(ref?' · '+ref:'');}
-      else if(v.kind==='환부'){var nm=(v.dName||'').trim();if(!nm||!v.order){toast('수령인 이름과 검사 지휘 확인이 필요합니다');return}
-        data.receiver=v.recv;data.receiverName=nm;data.prosecutorOrder=true;data.ref=ref;sum='환부 · '+v.recv+' '+nm+' · 검사 지휘'+(ref?' '+ref:'');}
+      else if(v.kind==='환부'){var nm=(v.dName||'').trim();if(!nm||!v.order){toast('수령인 이름과 검사 지휘·의견 확인이 필요합니다');return}
+        data.receiver=v.recv;data.receiverName=nm;data.prosecutorOrder=true;data.ref=ref;sum='환부 · '+v.recv+' '+nm+' · 검사 지휘·의견'+(ref?' '+ref:'');}
       else{data.reason=v.why;data.method=ref;sum='폐기 · '+v.why+(ref?' · '+ref:'');}
       data.summary=sum;
       await appendEvent(v.code,'dispose',data);
